@@ -3,8 +3,10 @@
 """Check config.yml before processing, with messages that say what to fix."""
 
 from numbers import Real
+from pathlib import Path
 
 from src.bubbles import DEFAULTS as BUBBLE_DEFAULTS
+from src.fieldlog import FieldLogError, field_log
 from src.fitting import GAS_COLUMNS
 from src.preselect import DEFAULTS as PRESELECT_DEFAULTS
 
@@ -20,6 +22,7 @@ OPTIONAL_SECTIONS = {
     "Bubbles": BUBBLE_DEFAULTS,
     "Plot": {"ylim_min": None, "ylim_max": None},
     "Output": {"excel": False},
+    "FieldLog": {"file": None},
 }
 KNOWN_KEYS = {"path_in", "path_out", "site", "Air", "Chamber", *OPTIONAL_SECTIONS}
 
@@ -100,7 +103,22 @@ def validate_config(cfg, filename="config.yml"):
     if gas not in GAS_COLUMNS:
         problems.append(f"'Preselect: gas' must be one of {', '.join(GAS_COLUMNS)}, found {gas!r}.")
 
+    if not problems:
+        log_cfg = cfg.get("FieldLog") or {}
+        if log_cfg.get("file"):
+            # a relative path is relative to the folder of the configuration file
+            path = Path(log_cfg["file"]).expanduser()
+            if not path.is_absolute():
+                path = Path(filename).resolve().parent / path
+            log_cfg["file"] = str(path)
+        try:
+            field_log(cfg)  # read it now, so that its errors show before processing
+        except FieldLogError as e:
+            problems.append(str(e))
+
     for key in cfg:
+        if key.startswith("_"):
+            continue
         if key not in KNOWN_KEYS:
             warnings.append(f"Unknown setting '{key}' is ignored.")
 

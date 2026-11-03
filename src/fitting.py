@@ -48,11 +48,15 @@ def fit_window(data, idx1, idx2, gas, bubble_options=None):
     }
 
 
-def to_flux(cfg, slope):
-    """Flux (mmol m-2 d-1) from a slope (ppm/s), with the chamber of the configuration."""
+def to_flux(cfg, slope, temp=None, pres=None):
+    """Flux (mmol m-2 d-1) from a slope (ppm/s), with the chamber of the configuration.
+
+    temp (degC) and pres (hPa) default to Air: Temp / Pres of the configuration.
+    """
     flux = pyg.chamber_flux(
         slope, cfg["Chamber"]["Volume"], cfg["Chamber"]["Area"],
-        cfg["Air"]["Temp"], cfg["Air"]["Pres"],
+        cfg["Air"]["Temp"] if temp is None else temp,
+        cfg["Air"]["Pres"] if pres is None else pres,
     )
     return flux.to("mmol m^-2 d^-1").magnitude
 

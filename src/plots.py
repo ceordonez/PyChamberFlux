@@ -13,6 +13,7 @@ from matplotlib.patches import Patch
 from matplotlib.widgets import MultiCursor
 from pandas.plotting import register_matplotlib_converters
 
+from src.fieldlog import conditions
 from src.fitting import GAS_COLUMNS, fit_window, quality_flag, to_flux, window_seconds
 from src.preselect import DEFAULTS as PRESELECT_DEFAULTS
 
@@ -33,6 +34,7 @@ POINT_COLOR = INK
 FLAG_COLOR = "#d03b3b"  # label of a window that would be flagged
 GAS_LABELS = {"CH4": "CH$_4$", "CO2": "CO$_2$"}
 MIN_POINTS = 3
+GRAB_PIXELS = 8  # a left click this close (in x) to a point drags it
 
 mpl.rcParams.update({
     "figure.facecolor": "white",
@@ -104,6 +106,7 @@ def _window_label(data, i, j, n, cfg):
         return f"{n}: too short", [], True
     quality = {**PRESELECT_DEFAULTS, **(cfg.get("Preselect") or {})}
     duration = (data.index[j] - data.index[i]).total_seconds()
+    air = conditions(cfg, data.index[i])
     lines = [str(n)]
     bubbles = []
     flags = []
@@ -114,7 +117,8 @@ def _window_label(data, i, j, n, cfg):
             lines.append(f"{GAS_LABELS[gas]} ?")
             flags.append(f"{GAS_LABELS[gas]} fit failed")
             continue
-        text = f"{GAS_LABELS[gas]} {to_flux(cfg, fit['slope']):.3g}  r {fit['rvalue']:.2f}"
+        flux = to_flux(cfg, fit["slope"], air["Temp"], air["Pres"])
+        text = f"{GAS_LABELS[gas]} {flux:.3g}  r {fit['rvalue']:.2f}"
         if fit["bubbles"]:
             bubbles = [(i + a, i + b) for a, b in fit["bubbles"]]
             text += f"  +{len(bubbles)} bubble{'s' if len(bubbles) > 1 else ''}"
@@ -158,10 +162,10 @@ def plot_select_points(data, cfg, preselected=(), title=""):
     gas and the CH4 bubbles found (drawn in violet). Windows that would be
     flagged in the results have a red label.
 
-    Left click: add the nearest sample.
-    Right click: remove the nearest point (to move an edge: right click it,
-    then left click the new position).
+    Left click: add the nearest sample; on a point: drag it to move it.
+    Right click: remove the nearest point.
     Key "d" or Delete: remove the window under the mouse.
+    Key "u" or Ctrl+Z: undo the last change.
     Enter, middle click or closing the window: finish and save.
     Key "s": skip this file (nothing saved). Key "q": stop (this file is not
     saved and the remaining files are not processed).
@@ -203,8 +207,8 @@ def plot_select_points(data, cfg, preselected=(), title=""):
     ax_ch4.set_title(title, loc="left", fontsize=12, fontweight="bold", pad=24)
     fig.text(
         0.5, 0.01,
-        "Left click: add point   Right click: remove nearest point   d: delete window under mouse   "
-        "Enter: save and next file   s: skip file   q: stop   "
+        "Left click: add point (drag a point to move it)   Right click: remove nearest point   "
+        "d: delete window under mouse   u: undo   Enter: save and next file   s: skip file   q: stop   "
         "(fluxes in mmol m$^{-2}$ d$^{-1}$; clicks are ignored while zoom/pan is on)",
         ha="center", va="bottom", fontsize=9, color=MUTED,
     )
@@ -222,10 +226,18 @@ def plot_select_points(data, cfg, preselected=(), title=""):
     selected = sorted({i for window in preselected for i in window})
     window_artists = []
     action = ["save"]  # changed by the s and q keys
+    history = []  # previous states of `selected`, for undo
+    drag = {"point": None, "moved": False}  # point being dragged
 
-    def redraw():
+    def remember():
+        history.append(list(selected))
+
+    def update_marks():
         for gas, mark in marks.items():
             mark.set_data(xnum[selected], values[gas][selected])
+
+    def redraw():
+        update_marks()
         for artist in window_artists:
             artist.remove()
         window_artists.clear()
@@ -269,17 +281,53 @@ def plot_select_points(data, cfg, preselected=(), title=""):
             return  # click outside the plot
         idx = int(np.abs(xnum - event.xdata).argmin())
         if event.button == MouseButton.LEFT:
+            grabbed = grabbed_point(event)
+            if grabbed is not None:  # start dragging it; redrawn on release
+                remember()
+                drag.update(point=grabbed, moved=False)
+                return
             if idx in selected:
                 return
+            remember()
             selected.append(idx)
             selected.sort()
         elif event.button == MouseButton.RIGHT:
             if not selected:
                 return
+            remember()
             nearest = min(selected, key=lambda i: abs(xnum[i] - event.xdata))
             selected.remove(nearest)
         else:
             return
+        redraw()
+
+    def grabbed_point(event):
+        """The selected point within GRAB_PIXELS (in x) of the click, if any."""
+        if not selected:
+            return None
+        to_pixels = event.inaxes.transData.transform
+        nearest = min(selected, key=lambda i: abs(xnum[i] - event.xdata))
+        distance = abs(to_pixels((xnum[nearest], 0))[0] - event.x)
+        return nearest if distance <= GRAB_PIXELS else None
+
+    def on_motion(event):
+        if drag["point"] is None or event.xdata is None:
+            return
+        idx = int(np.abs(xnum - event.xdata).argmin())
+        if idx == drag["point"] or idx in selected:
+            return
+        selected[selected.index(drag["point"])] = idx
+        drag.update(point=idx, moved=True)
+        update_marks()  # only the points while dragging; windows on release
+        fig.canvas.draw_idle()
+
+    def on_release(event):
+        if drag["point"] is None:
+            return
+        if not drag["moved"]:
+            history.pop()  # a click on a point without moving it changes nothing
+        drag.update(point=None, moved=False)
+        selected.sort()
         redraw()
 
     def on_key(event):
@@ -287,20 +335,30 @@ def plot_select_points(data, cfg, preselected=(), title=""):
             action[0] = {"enter": "save", "s": "skip", "q": "quit"}[event.key]
             plt.close(fig)
             return
+        if event.key in ("u", "ctrl+z"):
+            if history:
+                selected[:] = history.pop()
+                redraw()
+            return
         if event.key not in ("d", "delete") or event.xdata is None:
             return
         for n in range(0, len(selected) - 1, 2):
             if xnum[selected[n]] <= event.xdata <= xnum[selected[n + 1]]:
+                remember()
                 del selected[n : n + 2]
                 redraw()
                 return
 
     # Keep a reference to the cursor, otherwise it is garbage collected
-    cursor = MultiCursor(  # noqa: F841
-        None, (ax_ch4, ax_co2), useblit=False, color=INK_2, linewidth=0.8, linestyle="--"
-    )
+    cursor_style = {"useblit": False, "color": INK_2, "linewidth": 0.8, "linestyle": "--"}
+    try:
+        cursor = MultiCursor((ax_ch4, ax_co2), **cursor_style)  # noqa: F841
+    except TypeError:  # matplotlib < 3.11 needs the canvas first
+        cursor = MultiCursor(fig.canvas, (ax_ch4, ax_co2), **cursor_style)  # noqa: F841
     fig.canvas.mpl_connect("button_press_event", on_click)
     fig.canvas.mpl_connect("key_press_event", on_key)
+    fig.canvas.mpl_connect("motion_notify_event", on_motion)
+    fig.canvas.mpl_connect("button_release_event", on_release)
     redraw()
     plt.show()
 

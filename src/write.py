@@ -14,7 +14,7 @@ import yaml
 from src.bubbles import DEFAULTS as BUBBLE_DEFAULTS
 from src.fitting import GAS_COLUMNS, fit_window, window_seconds
 from src.preselect import DEFAULTS as PRESELECT_DEFAULTS
-from src.processing_data import bubble_table
+from src.processing_data import RESULT_COLUMNS, bubble_table
 from src.read_data import DIAGNOSTIC_COLUMNS
 
 FLUX_UNIT = "(mmol/m2/d)"
@@ -44,7 +44,7 @@ FIT_FIELDS = [
     ("N points", "N points"),
     ("Flag", "flag"),
 ]
-WINDOW_FIELDS = ["Time start", "Time end", "Duration (s)"]
+WINDOW_FIELDS = ["Time start", "Time end", "Duration (s)", "Air temp (degC)", "Air pres (hPa)"]
 CHECK_FIELDS = ["GasT mean (degC)", "AmbT mean (degC)", "GasP mean (torr)", "ID start", "ID end"]
 
 CSV_TIME = "%Y-%m-%d %H:%M:%S"
@@ -104,13 +104,54 @@ def write_results(data, results, cfg, name, source=None):
         write_excel(excelpath, table, bubbles, samples, settings)
         print(f"Excel file saved: {excelpath}")
 
-    site = Path(cfg["path_out"]) / cfg["site"]
+    site = campaign_prefix(cfg)
     for path, rows, keys in (
         (f"{site}_fluxes.csv", table, ["Time start", "Flux"]),
         (f"{site}_bubbles.csv", bubbles, ["Time start", "Flux", "Bubble"]),
     ):
         update_campaign(Path(path), rows, source, keys)
         print(f"Added to {path}")
+    print(summary(table))
+
+
+def campaign_prefix(cfg):
+    """path_out/<site>: the campaign files are <prefix>_fluxes.csv and _bubbles.csv."""
+    return Path(cfg["path_out"]) / cfg["site"]
+
+
+def processed_files(cfg):
+    """Names of the LGR files already in the campaign CSV."""
+    path = Path(f"{campaign_prefix(cfg)}_fluxes.csv")
+    if not path.exists():
+        return set()
+    try:
+        return set(pd.read_csv(path, usecols=["File"])["File"].astype(str))
+    except (ValueError, pd.errors.ParserError):
+        return set()
+
+
+def summary(table):
+    """Short table of the fluxes of one file, for the terminal."""
+    columns = {
+        "Flux": "Flux",
+        "Time start": "Start",
+        "Duration (s)": "s",
+        f"CH4 diffusive flux {FLUX_UNIT}": "CH4 diff",
+        f"CH4 ebullitive flux {FLUX_UNIT}": "CH4 ebul",
+        f"CO2 flux {FLUX_UNIT}": "CO2",
+    }
+    short = table[list(columns)].rename(columns=columns)
+    short["Start"] = short["Start"].dt.strftime("%H:%M:%S")
+    short["s"] = short["s"].round().astype(int)
+    flags = [
+        "; ".join(f"{gas} {row[f'{gas} flag']}" for gas in GAS_FIELDS
+                  if isinstance(row[f"{gas} flag"], str) and row[f"{gas} flag"])
+        for _, row in table.iterrows()
+    ]
+    short["Check"] = flags
+    for column in ("CH4 diff", "CH4 ebul", "CO2"):
+        short[column] = short[column].map(lambda v: f"{v:.3g}")
+    return f"Fluxes (mmol m-2 d-1):\n{short.to_string(index=False)}"
 
 
 def results_folder(cfg, name):
@@ -158,6 +199,8 @@ def results_table(results, source):
     for fid, res in results.groupby("FID", sort=True):
         first = res.iloc[0]
         row = {"File": source, "Flux": fid}
+        # field-log columns (e.g. Location) right after the flux number
+        row.update({c: first[c] for c in res.columns if c not in RESULT_COLUMNS})
         row.update({field: first[field] for field in WINDOW_FIELDS})
         for gas, fields in GAS_FIELDS.items():
             gas_row = res[res["Gas"] == gas].iloc[0]
@@ -200,7 +243,8 @@ def settings_dict(cfg, source):
             "PyChamberFlux": _project_version(),
             "pyghgaq": _package_version("pyghgaq"),
         },
-        "Air": dict(cfg["Air"]),  # Temp (degC) and Pres (hPa), used for the flux
+        "Air": dict(cfg["Air"]),  # Temp (degC) and Pres (hPa), when not in the field log
+        "FieldLog": (cfg.get("FieldLog") or {}).get("file") or "none",
         "Chamber": dict(cfg["Chamber"]),  # Volume (L) and Area (m2)
         "Preselect": {**PRESELECT_DEFAULTS, **(cfg.get("Preselect") or {})},
         "Bubbles": {**BUBBLE_DEFAULTS, **(cfg.get("Bubbles") or {})},

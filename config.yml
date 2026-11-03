@@ -26,6 +26,11 @@ Plot:
 Output:
   excel: false
 
+# Optional field log (CSV): air temperature/pressure and notes (e.g. Location)
+# for each location or deployment, matched by time. See the README.
+FieldLog:
+  file:
+
 # Automatic pre-selection of the flux windows, to check on the plot.
 # Remove a line to use its default.
 Preselect:

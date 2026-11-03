@@ -7,6 +7,7 @@ Usage:
     uv run main.py FILE [FILE ...]     process these LGR files
     uv run main.py FOLDER              process all .txt files in the folder
     uv run main.py -c other.yml FILE   use another configuration file
+    uv run main.py -n FOLDER           only the files not processed yet
 """
 
 import argparse
@@ -17,7 +18,7 @@ from src.config import ConfigError, validate_config
 from src.plots import plot_data
 from src.processing_data import processing_data
 from src.read_data import read_config, read_lgr_file
-from src.write import results_folder, saved_windows, write_results
+from src.write import processed_files, results_folder, saved_windows, write_results
 
 HERE = Path(__file__).resolve().parent
 
@@ -111,6 +112,10 @@ def main(argv=None):
         help="configuration file (default: config.local.yml next to main.py if it "
              "exists, otherwise config.yml)",
     )
+    parser.add_argument(
+        "-n", "--new-only", action="store_true",
+        help="skip the files already in <path_out>/<site>_fluxes.csv",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -119,6 +124,13 @@ def main(argv=None):
         sys.exit(str(e))
     print(f"Configuration: {args.config}")
     files = find_files(args.paths) if args.paths else ask_files(cfg.get("path_in"))
+    if args.new_only:
+        done = processed_files(cfg)
+        skipped = [f for f in files if f.name in done]
+        files = [f for f in files if f.name not in done]
+        if skipped:
+            print(f"Skipping {len(skipped)} file{'s' if len(skipped) > 1 else ''} "
+                  f"already in the campaign file (--new-only).")
     if not files:
         print("No files to process.")
         return
