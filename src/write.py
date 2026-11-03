@@ -12,7 +12,7 @@ import pandas as pd
 import yaml
 
 from src.bubbles import DEFAULTS as BUBBLE_DEFAULTS
-from src.fitting import GAS_COLUMNS, fit_window, window_seconds
+from src.fitting import GAS_COLUMNS, QUALITY_DEFAULTS, fit_window, window_seconds
 from src.preselect import DEFAULTS as PRESELECT_DEFAULTS
 from src.processing_data import RESULT_COLUMNS, bubble_table
 from src.read_data import DIAGNOSTIC_COLUMNS
@@ -42,6 +42,10 @@ FIT_FIELDS = [
     ("Value start (ppm)", "start (ppm)"),
     ("Value end (ppm)", "end (ppm)"),
     ("N points", "N points"),
+    ("Precision (ppm)", "precision (ppm)"),
+    ("MDF (mmol/m2/d)", f"MDF {FLUX_UNIT}"),
+    ("Quadratic flux (mmol/m2/d)", f"quadratic flux {FLUX_UNIT}"),
+    ("Nonlinearity", "nonlinearity"),
     ("Flag", "flag"),
 ]
 WINDOW_FIELDS = ["Time start", "Time end", "Duration (s)", "Air temp (degC)", "Air pres (hPa)"]
@@ -151,7 +155,10 @@ def summary(table):
     short["Check"] = flags
     for column in ("CH4 diff", "CH4 ebul", "CO2"):
         short[column] = short[column].map(lambda v: f"{v:.3g}")
-    return f"Fluxes (mmol m-2 d-1):\n{short.to_string(index=False)}"
+    width = max([len("Check"), *map(len, flags)])
+    short = short.rename(columns={"Check": f"{'Check':<{width}}"})
+    text = short.to_string(index=False, formatters={short.columns[-1]: lambda s: f"{s:<{width}}"})
+    return f"Fluxes (mmol m-2 d-1):\n{text}"
 
 
 def results_folder(cfg, name):
@@ -244,10 +251,14 @@ def settings_dict(cfg, source):
             "pyghgaq": _package_version("pyghgaq"),
         },
         "Air": dict(cfg["Air"]),  # Temp (degC) and Pres (hPa), when not in the field log
-        "FieldLog": (cfg.get("FieldLog") or {}).get("file") or "none",
+        "FieldLog": {
+            "file": (cfg.get("FieldLog") or {}).get("file") or "none",
+            "time_offset": (cfg.get("FieldLog") or {}).get("time_offset") or 0,
+        },
         "Chamber": dict(cfg["Chamber"]),  # Volume (L) and Area (m2)
         "Preselect": {**PRESELECT_DEFAULTS, **(cfg.get("Preselect") or {})},
         "Bubbles": {**BUBBLE_DEFAULTS, **(cfg.get("Bubbles") or {})},
+        "Quality": {**QUALITY_DEFAULTS, **(cfg.get("Quality") or {})},
     }
 
 

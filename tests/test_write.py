@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
 from conftest import EXAMPLE_WINDOWS, synthetic_data
+
 from src.processing_data import calculate_fluxes
 from src.write import processed_files, saved_windows, summary, write_results
 
@@ -26,6 +26,10 @@ def test_result_files(cfg, example_data):
     assert len(results) == 3  # one row per flux, both gases in it
     assert results["CO2 flux (mmol/m2/d)"].iloc[0] == pytest.approx(57.11912105888556)
     assert results["File"].unique().tolist() == ["example.txt"]
+    for gas in ("CH4", "CO2"):
+        for column in ("MDF (mmol/m2/d)", "quadratic flux (mmol/m2/d)", "nonlinearity",
+                       "precision (ppm)", "flag"):
+            assert f"{gas} {column}" in results.columns
 
     samples = pd.read_csv(folder / "samples.csv")
     assert samples.groupby("Flux").size().tolist() == [380, 413, 821]

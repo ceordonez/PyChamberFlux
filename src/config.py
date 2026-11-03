@@ -7,7 +7,7 @@ from pathlib import Path
 
 from src.bubbles import DEFAULTS as BUBBLE_DEFAULTS
 from src.fieldlog import FieldLogError, field_log
-from src.fitting import GAS_COLUMNS
+from src.fitting import GAS_COLUMNS, QUALITY_DEFAULTS
 from src.preselect import DEFAULTS as PRESELECT_DEFAULTS
 
 # Required numbers: (section, key, description, must be > 0)
@@ -22,7 +22,8 @@ OPTIONAL_SECTIONS = {
     "Bubbles": BUBBLE_DEFAULTS,
     "Plot": {"ylim_min": None, "ylim_max": None},
     "Output": {"excel": False},
-    "FieldLog": {"file": None},
+    "FieldLog": {"file": None, "time_offset": 0},
+    "Quality": QUALITY_DEFAULTS,
 }
 KNOWN_KEYS = {"path_in", "path_out", "site", "Air", "Chamber", *OPTIONAL_SECTIONS}
 
@@ -79,7 +80,9 @@ def validate_config(cfg, filename="config.yml"):
             continue
         value = values.get(key)
         if not _is_number(value):
-            problems.append(f"'{section}: {key}' ({description}) must be a number, found {value!r}.")
+            problems.append(
+                f"'{section}: {key}' ({description}) must be a number, found {value!r}."
+            )
         elif positive and value <= 0:
             problems.append(f"'{section}: {key}' ({description}) must be > 0, found {value}.")
 
@@ -99,6 +102,12 @@ def validate_config(cfg, filename="config.yml"):
                 problems.append(
                     f"'{section}: {key}' must be {_kind(defaults[key])}, found {value!r}."
                 )
+    for key, value in (cfg.get("Quality") or {}).items():
+        if key.endswith("_precision") and value is not None and (
+            not _is_number(value) or value <= 0
+        ):
+            problems.append(f"'Quality: {key}' must be a number > 0 (ppm) or empty, "
+                            f"found {value!r}.")
     gas = (cfg.get("Preselect") or {}).get("gas", "CO2")
     if gas not in GAS_COLUMNS:
         problems.append(f"'Preselect: gas' must be one of {', '.join(GAS_COLUMNS)}, found {gas!r}.")

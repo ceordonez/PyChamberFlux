@@ -2,11 +2,11 @@
 
 import matplotlib.pyplot as plt
 import pytest
+from conftest import EXAMPLE_WINDOWS
 from matplotlib.backend_bases import KeyEvent, MouseButton, MouseEvent
 from matplotlib.dates import date2num
 
 import main
-from conftest import EXAMPLE_WINDOWS
 from src.plots import plot_select_points
 
 
@@ -129,8 +129,15 @@ def test_main_new_only_and_quit(monkeypatch, cfg, tmp_path, example_data, capsys
     monkeypatch.setattr(main, "read_config", lambda path: cfg)
 
     keys = iter(["enter", "q"])
-    monkeypatch.setattr(plt, "show", lambda *a, **k: _press(next(keys)))
+    titles = []
+
+    def show(*args, **kwargs):
+        titles.append(plt.gcf().axes[0].get_title(loc="left"))
+        _press(next(keys))
+
+    monkeypatch.setattr(plt, "show", show)
     main.main([str(lgr)])
+    assert titles == ["a.txt   (1 of 3)", "b.txt   (2 of 3)"]
     out = capsys.readouterr().out
     assert "Fluxes (mmol m-2 d-1)" in out  # summary of a.txt
     assert "Stopped, this file was not saved." in out and "1 file not processed." in out

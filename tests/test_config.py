@@ -17,6 +17,7 @@ def test_valid_config(cfg):
 
 def test_repository_config_is_valid():
     from conftest import ROOT
+
     from src.read_data import read_config
 
     check(read_config(str(ROOT / "config.yml")))
@@ -99,6 +100,7 @@ def test_without_field_log_only_air(cfg):
 
 def test_field_log_columns_in_results(logged_cfg, example_data):
     from conftest import EXAMPLE_WINDOWS
+
     from src.processing_data import calculate_fluxes
     from src.write import results_table
 
@@ -123,3 +125,38 @@ def test_field_log_errors(tmp_path, content, message):
     path.write_text(content)
     with pytest.raises(FieldLogError, match=message):
         load_field_log(path)
+
+
+def test_field_log_time_offset(logged_cfg):
+    # the LGR clock is one hour ahead of the field log
+    logged_cfg["FieldLog"]["time_offset"] = 3600
+    assert conditions(logged_cfg, pd.Timestamp("2025-01-11 17:35"))["Location"] == ""
+    assert conditions(logged_cfg, pd.Timestamp("2025-01-11 18:35"))["Location"] == "Site A"
+
+
+def test_warning_when_no_flux_matches_the_field_log(logged_cfg, example_data, capsys):
+    from conftest import EXAMPLE_WINDOWS
+
+    from src.processing_data import calculate_fluxes
+
+    logged_cfg["FieldLog"]["time_offset"] = -86400  # field log one day off
+    calculate_fluxes(logged_cfg, example_data, EXAMPLE_WINDOWS)
+    assert "no flux of this file matches a row of the field log" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("value", [0, -1, "high", True])
+def test_quality_precision_must_be_positive(cfg, value):
+    cfg["Quality"] = {"CH4_precision": value}
+    with pytest.raises(ConfigError, match="Quality: CH4_precision"):
+        check(cfg)
+
+
+def test_quality_settings_accepted(cfg):
+    cfg["Quality"] = {"max_nonlinearity": 0.3, "CH4_precision": 0.002, "CO2_precision": None}
+    check(cfg)
+
+
+def test_row_without_end_stops_at_the_end_of_its_day(logged_cfg):
+    # Site C (18:30, no End) is the last row: it must not apply the next day
+    assert conditions(logged_cfg, pd.Timestamp("2025-01-11 23:59"))["Location"] == "Site C"
+    assert conditions(logged_cfg, pd.Timestamp("2025-01-12 08:00"))["Location"] == ""

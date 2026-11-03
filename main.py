@@ -63,8 +63,10 @@ def ask_files(initialdir=None):
     return [Path(name) for name in names]
 
 
-def process_file(path, cfg):
+def process_file(path, cfg, progress=""):
     """Select the fluxes of one LGR file and save figures and results.
+
+    progress (e.g. "3 of 12") is shown in the title of the selection plot.
 
     Returns "save", "skip" or "quit" (stop processing the remaining files).
     """
@@ -83,7 +85,8 @@ def process_file(path, cfg):
     if windows is not None:
         print(f"Processed before: showing the {len(windows)} windows saved in "
               f"{results_folder(cfg, name)}.")
-    results, action = processing_data(data, cfg, title=path.name, windows=windows)
+    title = f"{path.name}   ({progress})" if progress else path.name
+    results, action = processing_data(data, cfg, title=title, windows=windows)
     if action == "skip":
         print("Skipped, nothing saved.")
         return action
@@ -136,7 +139,7 @@ def main(argv=None):
         return
 
     for n, path in enumerate(files, start=1):
-        if process_file(path, cfg) == "quit":
+        if process_file(path, cfg, f"{n} of {len(files)}") == "quit":
             remaining = len(files) - n
             if remaining:
                 print(f"{remaining} file{'s' if remaining > 1 else ''} not processed.")

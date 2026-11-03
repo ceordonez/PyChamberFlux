@@ -4,9 +4,8 @@
 import pandas as pd
 
 from src.fieldlog import conditions
-from src.fitting import GAS_COLUMNS, fit_window, quality_flag, to_flux
+from src.fitting import GAS_COLUMNS, assess_fit, fit_window, to_flux
 from src.plots import plot_select_points
-from src.preselect import DEFAULTS as PRESELECT_DEFAULTS
 from src.preselect import preselect_windows
 from src.read_data import DIAGNOSTIC_COLUMNS
 
@@ -30,6 +29,10 @@ RESULT_COLUMNS = [
     "Intercept (ppm)",
     "N points",
     "Duration (s)",
+    "Precision (ppm)",
+    "MDF (mmol/m2/d)",
+    "Quadratic flux (mmol/m2/d)",
+    "Nonlinearity",
     "Flag",
     "Air temp (degC)",
     "Air pres (hPa)",
@@ -106,14 +109,20 @@ def calculate_fluxes(cfg, data, windows):
         (FieldLog: file) when it has a row for the flux, otherwise from Air in
         the configuration. The extra columns of the field log (e.g. Location)
         are added after RESULT_COLUMNS.
+
+        "MDF" is the minimum detectable flux and "Quadratic flux" the flux
+        from the initial slope of a quadratic fit, as a check of the
+        linearity ("Nonlinearity" = quadratic / linear slope - 1); see
+        src.fitting.assess_fit. "Flag" lists the reasons to check the flux.
     """
     bubble_options = cfg.get("Bubbles")
-    quality = {**PRESELECT_DEFAULTS, **(cfg.get("Preselect") or {})}
 
     rows = []
     extras = []
+    unmatched = 0
     for fid, (idx1, idx2) in enumerate(windows, start=1):
         field = conditions(cfg, data.index[idx1])
+        unmatched += not field.pop("_matched", True)
         temp, pres = field.pop("Temp"), field.pop("Pres")
         extras = list(field)
 
@@ -128,7 +137,8 @@ def calculate_fluxes(cfg, data, windows):
         for gas in ("CH4", "CO2"):
             window = data[GAS_COLUMNS[gas]].iloc[idx1 : idx2 + 1]
             fit = fit_window(data, idx1, idx2, gas, bubble_options)
-            diffusive = flux(fit["slope"])
+            quality = assess_fit(cfg, data, idx1, idx2, gas, fit, temp, pres)
+            diffusive = quality["flux"]
             duration = (window.index[-1] - window.index[0]).total_seconds()
             row = {
                 "FID": fid,
@@ -147,7 +157,11 @@ def calculate_fluxes(cfg, data, windows):
                 "Intercept (ppm)": fit["intercept"],
                 "N points": fit["n"],
                 "Duration (s)": duration,
-                "Flag": quality_flag(fit["rvalue"], duration, quality),
+                "Precision (ppm)": quality["precision"],
+                "MDF (mmol/m2/d)": quality["mdf"],
+                "Quadratic flux (mmol/m2/d)": quality["quad_flux"],
+                "Nonlinearity": quality["nonlinearity"],
+                "Flag": quality["flag"],
                 "Air temp (degC)": temp,
                 "Air pres (hPa)": pres,
                 **diagnostics,
@@ -160,6 +174,12 @@ def calculate_fluxes(cfg, data, windows):
                 row["Ebullitive flux (mmol/m2/d)"] = ebullitive
                 row["Total flux (mmol/m2/d)"] = diffusive + ebullitive
             rows.append(row)
+    if unmatched and unmatched == len(windows):
+        print("Warning: no flux of this file matches a row of the field log; Air of the "
+              "configuration was used. Check the dates and FieldLog: time_offset.")
+    elif unmatched:
+        print(f"Warning: {unmatched} flux{'es' if unmatched > 1 else ''} without a row in the "
+              "field log; Air of the configuration was used for them.")
     return pd.DataFrame(rows, columns=RESULT_COLUMNS + extras)
 
 

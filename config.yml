@@ -30,6 +30,13 @@ Output:
 # for each location or deployment, matched by time. See the README.
 FieldLog:
   file:
+  time_offset: 0     # s; field-log time + time_offset = LGR time
+
+# Quality checks of each flux (reported in the flag column and on the plot)
+Quality:
+  max_nonlinearity: 0.2  # flag when a quadratic fit gives an initial slope >20 % different
+  CH4_precision:         # ppm, analyser precision for the minimum detectable flux;
+  CO2_precision:         # empty: estimated from the noise of each window
 
 # Automatic pre-selection of the flux windows, to check on the plot.
 # Remove a line to use its default.

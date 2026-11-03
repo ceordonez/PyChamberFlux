@@ -14,8 +14,14 @@ from matplotlib.widgets import MultiCursor
 from pandas.plotting import register_matplotlib_converters
 
 from src.fieldlog import conditions
-from src.fitting import GAS_COLUMNS, fit_window, quality_flag, to_flux, window_seconds
-from src.preselect import DEFAULTS as PRESELECT_DEFAULTS
+from src.fitting import (
+    GAS_COLUMNS,
+    assess_fit,
+    fit_window,
+    jump_shift,
+    quadratic_fit,
+    window_seconds,
+)
 
 register_matplotlib_converters()
 # Interactive backend for the point selection, unless one is set explicitly
@@ -104,8 +110,6 @@ def _window_label(data, i, j, n, cfg):
     """
     if j - i + 1 < MIN_POINTS:
         return f"{n}: too short", [], True
-    quality = {**PRESELECT_DEFAULTS, **(cfg.get("Preselect") or {})}
-    duration = (data.index[j] - data.index[i]).total_seconds()
     air = conditions(cfg, data.index[i])
     lines = [str(n)]
     bubbles = []
@@ -117,19 +121,25 @@ def _window_label(data, i, j, n, cfg):
             lines.append(f"{GAS_LABELS[gas]} ?")
             flags.append(f"{GAS_LABELS[gas]} fit failed")
             continue
-        flux = to_flux(cfg, fit["slope"], air["Temp"], air["Pres"])
-        text = f"{GAS_LABELS[gas]} {flux:.3g}  r {fit['rvalue']:.2f}"
+        quality = assess_fit(cfg, data, i, j, gas, fit, air["Temp"], air["Pres"])
+        text = f"{GAS_LABELS[gas]} {quality['flux']:.3g}  r {fit['rvalue']:.2f}"
         if fit["bubbles"]:
             bubbles = [(i + a, i + b) for a, b in fit["bubbles"]]
             text += f"  +{len(bubbles)} bubble{'s' if len(bubbles) > 1 else ''}"
         lines.append(text)
-        flag = quality_flag(fit["rvalue"], duration, quality)
-        if flag:
-            flags += [f"{GAS_LABELS[gas]} {f}" if f.startswith("|r|")
-                      else f.replace("shorter than", "<") for f in flag.split("; ")]
+        if quality["flag"]:
+            flags += [f.replace("shorter than", "<") if f.startswith("shorter")
+                      else f"{GAS_LABELS[gas]} {_short_flag(f)}"
+                      for f in quality["flag"].split("; ")]
     if flags:
         lines.append("check: " + ", ".join(dict.fromkeys(flags)))
     return "\n".join(lines), bubbles, bool(flags)
+
+
+def _short_flag(flag):
+    """Shorter flag text for the window labels."""
+    return (flag.replace("below detection limit", "< MDF")
+            .replace("nonlinear, ", ""))
 
 
 def _unstack_labels(fig, ax, labels, pad=5):
@@ -208,7 +218,8 @@ def plot_select_points(data, cfg, preselected=(), title=""):
     fig.text(
         0.5, 0.01,
         "Left click: add point (drag a point to move it)   Right click: remove nearest point   "
-        "d: delete window under mouse   u: undo   Enter: save and next file   s: skip file   q: stop   "
+        "d: delete window under mouse   u: undo   Enter: save and next file   "
+        "s: skip file   q: stop   "
         "(fluxes in mmol m$^{-2}$ d$^{-1}$; clicks are ignored while zoom/pan is on)",
         ha="center", va="bottom", fontsize=9, color=MUTED,
     )
@@ -397,6 +408,12 @@ def _flux_text(gas, row):
             f"  ({n} bubble{'s' if n > 1 else ''})"
         )
         lines.append(f"Total flux = {row['Total flux (mmol/m2/d)']:.3g} {unit}")
+    lines.append(
+        f"MDF = {row['MDF (mmol/m2/d)']:.2g}    quadratic: {row['Quadratic flux (mmol/m2/d)']:.3g}"
+        f" ({row['Nonlinearity']:+.0%})"
+    )
+    if isinstance(row["Flag"], str) and row["Flag"]:
+        lines.append(f"check: {row['Flag']}")
     return "\n".join(lines)
 
 
@@ -424,12 +441,22 @@ def plot_perflux(data, results, cfg, name, folder):
                 part = (segment == k) & used
                 ax.plot(seconds[part], offset + fit["slope"] * seconds[part], color=INK,
                         lw=1.5, label="Linear fit" if k == min(fit["offsets"]) else None)
+            coefs = quadratic_fit(seconds, values, fit)
+            if coefs is not None:
+                shift = jump_shift(fit, len(values))
+                for k in fit["offsets"]:
+                    part = (segment == k) & used
+                    ax.plot(seconds[part], np.polyval(coefs, seconds[part]) + shift[part],
+                            color=INK_2, lw=1.2, ls="--",
+                            label="Quadratic fit (check)" if k == min(fit["offsets"]) else None)
             # statistics and legend in the corners the data does not reach
             rising = fit["slope"] >= 0
             ax.text(0.02, 0.97 if rising else 0.03, _flux_text(gas, row),
                     transform=ax.transAxes, va="top" if rising else "bottom",
                     fontsize=9, color=INK, linespacing=1.5,
-                    bbox={"boxstyle": "round,pad=0.4", "fc": "white", "ec": GRID})
+                    bbox={"boxstyle": "round,pad=0.4", "fc": "white",
+                          "ec": FLAG_COLOR if isinstance(row["Flag"], str) and row["Flag"]
+                          else GRID})
             ax.legend(loc="lower right" if rising else "upper right")
             _gas_ylabel(ax, gas)
         axes[-1].set_xlabel("Time since start of window (s)")

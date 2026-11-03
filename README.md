@@ -45,6 +45,7 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
    - `Plot`: optional y limits of the CH<sub>4</sub> axis of the selection plot.
    - `Output`: `excel: true` to also save the results as an Excel file (CSV only by default).
    - `FieldLog`: optional CSV with the air temperature/pressure and notes (e.g. location) of each location or deployment, see [Field log](#field-log).
+   - `Quality`: limits of the quality checks, see [Quality checks](#quality-checks).
    - `Preselect` and `Bubbles`: see below. Remove a line to use its default.
 
    The configuration is checked before processing: missing or wrong values and misspelled settings are listed with what to fix.
@@ -61,7 +62,7 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
    Windows users can also double-click `main.py` to get the dialog, if `.venv` is the Python that opens `.py` files (otherwise use `uv run main.py`).
 
    To try it, run `uv run main.py examples/example.txt`: about one hour of LGR data with three chamber deployments.
-3. Check the flux windows on the plot of each file (CH<sub>4</sub> on top, CO<sub>2</sub> below, on the same time axis; clicks work on both). The pre-selected windows are shaded and labelled with their number, the diffusive flux (mmol m⁻² d⁻¹) and Pearson r of each gas and the CH<sub>4</sub> bubbles found (the excluded part of the CH<sub>4</sub> line is drawn in violet). A label is red when the flux would be flagged in the results (|r| < `min_r` or window shorter than `min_duration`). Points are paired in time order (1st–2nd, 3rd–4th, ...).
+3. Check the flux windows on the plot of each file (CH<sub>4</sub> on top, CO<sub>2</sub> below, on the same time axis; clicks work on both). The pre-selected windows are shaded and labelled with their number, the diffusive flux (mmol m⁻² d⁻¹) and Pearson r of each gas and the CH<sub>4</sub> bubbles found (the excluded part of the CH<sub>4</sub> line is drawn in violet). A label is red when the flux would be flagged in the results (see [Quality checks](#quality-checks)). The title shows the progress (e.g. `3 of 12`). Points are paired in time order (1st–2nd, 3rd–4th, ...).
    - **Left click**: add a point. Click on a point and drag it to move a window edge.
    - **Right click**: remove the nearest point.
    - **`d`** (or Delete) with the mouse over a window: delete that window.
@@ -88,11 +89,24 @@ Start,End,Temp,Pres,Location,Notes
 ```
 
 - `Start` (required): when the row starts to apply, as `YYYY-MM-DD HH:MM[:SS]`, in the clock of the LGR analyser.
-- `End` (optional): when it stops applying. Without `End`, a row applies until the `Start` of the next row.
+- `End` (optional): when it stops applying. Without `End`, a row applies until the `Start` of the next row, and at most until the end of its day (so a file from another day never takes the last row of the day before).
 - `Temp` (°C) and `Pres` (hPa) (optional): empty values (or no column) use `Air` of the configuration.
 - Any other column (`Location`, `Chamber`, `Notes`, ...) is copied to the results, after `Flux`.
 
+If the clock of the analyser differs from the field log (e.g. UTC vs local time), set `FieldLog: time_offset` (s) so that field-log time + `time_offset` = LGR time; a warning is printed when no flux of a file matches a row.
+
 Each flux uses the row that applies at the start of its window; fluxes without a row use `Air` and empty extra columns. The temperature and pressure used are in the results (`Air temp (degC)`, `Air pres (hPa)`), and the labels of the selection plot use them too.
+
+### Quality checks
+
+Each flux of each gas gets a `flag` listing the reasons to check it (empty when it looks fine):
+
+- **`below detection limit`**: |flux| is smaller than the minimum detectable flux, MDF = (A / t<sub>c</sub>) · P V / (R T A<sub>c</sub>) (Christiansen et al., 2015), with A the precision of the analyser, t<sub>c</sub> the duration of the window and A<sub>c</sub> the chamber area. A is `Quality: CH4_precision` / `CO2_precision` (ppm) or, if empty, the sample-to-sample noise of the window. A flux below the MDF is not distinguishable from zero; its low r is expected and not flagged.
+- **`|r| < min_r`**: poor linear fit (`Preselect: min_r`).
+- **`shorter than min_duration s`** (`Preselect: min_duration`).
+- **`nonlinear, saturating`** / **`nonlinear, accelerating`**: a quadratic fit (Wagner et al., 1997) gives an initial slope more than `Quality: max_nonlinearity` (20 %) steeper or flatter than the linear slope. *Saturating*: the concentration levels off (e.g. long deployments), and the linear fit underestimates the flux at closure. *Accelerating*: the concentration rises faster later, often because the chamber was still settling at the start of the window; moving the start later usually fixes it. The quadratic fit is only a check: the reported flux is always the linear one (quadratic fits are unreliable for long floating-chamber deployments, Xiao et al., 2016), and the quadratic flux is in the results for comparison.
+
+The per-flux figures show the quadratic fit (dashed), the MDF and the flags.
 
 ### Pre-selection
 
@@ -125,7 +139,7 @@ For each LGR file, a folder `path_out/<site>_<file>/` with:
   - `File`, `Flux` number, the extra columns of the field log (if any), `Time start`, `Time end`, `Duration (s)`, and the air temperature and pressure used for the flux;
   - CH<sub>4</sub>: diffusive flux and its standard error, ebullitive and total flux (mmol m⁻² d⁻¹), number of bubbles;
   - CO<sub>2</sub>: flux and its standard error (mmol m⁻² d⁻¹);
-  - for each gas: slope (ppm s⁻¹) and its standard error, Pearson r, intercept, first and last value, number of samples used and a `flag` when the flux should be checked (|r| < `min_r` or window shorter than `min_duration`, from `Preselect`; empty when it looks fine);
+  - for each gas: slope (ppm s⁻¹) and its standard error, Pearson r, intercept, first and last value, number of samples used, the precision used (ppm), the minimum detectable flux (`MDF`), the flux from the quadratic fit and the `nonlinearity` (quadratic / linear initial slope − 1), and the `flag` (see [Quality checks](#quality-checks));
   - the means of the LGR cell temperature (`GasT_C`), the temperature inside the analyser (`AmbT_C`) and the cell pressure (`GasP_torr`), and the row numbers of the window in the LGR file (`ID start`, `ID end`). The LGR temperatures and pressure are only to check the analyser (e.g. the cell pressure should stay at ~140 torr); they are not the chamber conditions and are not used for the flux.
 
   The standard errors of the fluxes are those of the slopes, converted to fluxes; they do not include the uncertainty of the chamber volume, area, temperature or pressure.
@@ -151,10 +165,17 @@ $$F = \frac{dC}{dt}\frac{P V}{R T A}$$
 
 with $dC/dt$ the slope of the dry mole fraction, $P$ and $T$ the pressure and temperature in the chamber (`Air` in `config.yml`), $V$ the chamber volume and $A$ its area.
 
+### References
+
+- Christiansen, J. R. et al. (2015). Comparison of CO2, CH4 and N2O soil-atmosphere exchange measured in static chambers with cavity ring-down spectroscopy and gas chromatography. *Agricultural and Forest Meteorology*. https://doi.org/10.1016/j.agrformet.2015.06.004
+- Wagner, S. W. et al. (1997). Regression models for calculating gas fluxes measured with a closed chamber. *Agronomy Journal*. https://doi.org/10.2134/agronj1997.00021962008900020021x
+- Xiao, S.-B. et al. (2016). Theoretical model for diffusive greenhouse gas fluxes estimation across water-air interfaces measured with the static floating chamber method. *Atmospheric Environment*. https://doi.org/10.1016/j.atmosenv.2016.04.036
+
 ## Tests
 
 ```sh
-uv run pytest
+uv run pytest       # tests
+uv run ruff check   # lint
 ```
 
 The tests check the fluxes of the example file against reference values, the bubble separation on synthetic data, the configuration and field log checks, the result files, and the selection window (with simulated clicks and keys). They run on GitHub for every push.

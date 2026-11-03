@@ -11,10 +11,14 @@ The field log is a CSV file with one row per location (or per deployment):
 - Start (required): when the row starts to apply, as YYYY-MM-DD HH:MM[:SS],
   in the same clock as the LGR analyser.
 - End (optional): when it stops applying. Without End, a row applies until
-  the Start of the next row.
+  the Start of the next row, and at most until the end of its day.
 - Temp (degC) and Pres (hPa) (optional): air temperature and pressure in the
   chamber. Empty values (or no column) use Air: Temp / Pres of config.yml.
 - Any other column (Location, Chamber, Notes, ...) is copied to the results.
+
+If the clock of the LGR analyser and the field log differ, set
+FieldLog: time_offset (seconds) so that field-log time + time_offset =
+LGR time (e.g. 3600 if the LGR is one hour ahead).
 
 A flux uses the row that applies at the start of its window. Fluxes without
 a row use the values of config.yml and empty extra columns.
@@ -71,7 +75,8 @@ def load_field_log(path):
     bad = log["End"].notna() & (log["End"] <= log["Start"])
     if bad.any():
         raise FieldLogError(
-            f"End is not after Start in the field log {path}: lines {(log.index[bad] + 2).tolist()}."
+            f"End is not after Start in the field log {path}: "
+            f"lines {(log.index[bad] + 2).tolist()}."
         )
     return log.sort_values("Start", ignore_index=True)
 
@@ -82,13 +87,19 @@ def extra_columns(log):
 
 
 def field_log(cfg):
-    """The field log of the configuration (read once), or None."""
-    path = (cfg.get("FieldLog") or {}).get("file")
+    """The field log of the configuration (read once), in the LGR clock, or None."""
+    options = cfg.get("FieldLog") or {}
+    path = options.get("file")
     if not path:
         return None
+    offset = options.get("time_offset") or 0
     cached = cfg.get("_field_log")
-    if cached is None or cached[0] != path:
-        cfg["_field_log"] = (path, load_field_log(path))
+    if cached is None or cached[0] != (path, offset):
+        log = load_field_log(path)
+        shift = pd.Timedelta(seconds=offset)
+        log["Start"] += shift
+        log["End"] += shift
+        cfg["_field_log"] = ((path, offset), log)
     return cfg["_field_log"][1]
 
 
@@ -99,7 +110,8 @@ def conditions(cfg, start):
     -------
     dict
         Temp (degC), Pres (hPa) and the extra columns of the field log (empty
-        strings when no row applies).
+        strings when no row applies). With a field log, "_matched" says
+        whether a row applies.
     """
     result = {"Temp": cfg["Air"]["Temp"], "Pres": cfg["Air"]["Pres"]}
     log = field_log(cfg)
@@ -107,12 +119,16 @@ def conditions(cfg, start):
         return result
     extras = extra_columns(log)
     result.update({c: "" for c in extras})
+    result["_matched"] = False
     before = log[log["Start"] <= start]
     if before.empty:
         return result
     row = before.iloc[-1]
-    if pd.notna(row["End"]) and row["End"] < start:
+    # without End: until the next Start (already ensured) or the end of the day
+    end = row["End"] if pd.notna(row["End"]) else row["Start"].normalize() + pd.Timedelta(days=1)
+    if end < start:
         return result
+    result["_matched"] = True
     for column, key in CONDITION_COLUMNS.items():
         if column in log.columns and pd.notna(row[column]):
             result[key] = float(row[column])
