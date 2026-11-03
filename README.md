@@ -1,5 +1,7 @@
 # PyChamberFlux
 
+[![tests](https://github.com/ceordonez/PyChamberFlux/actions/workflows/tests.yml/badge.svg)](https://github.com/ceordonez/PyChamberFlux/actions/workflows/tests.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Interactive tool to calculate floating chamber fluxes of CH<sub>4</sub> and CO<sub>2</sub> from LGR (Los Gatos Research) analyser files. Both gases are processed from one selection of the chamber deployments, and CH<sub>4</sub> bubbles (ebullition) are separated from the diffusive flux. The slope and flux calculations use [PyGHGaq](https://github.com/ceordonez/PyGHGaq) (`chamber_slope` and `chamber_flux`).
 
 ## Quick start
