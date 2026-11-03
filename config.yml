@@ -21,3 +21,13 @@ Chamber:
 Plot:
   ylim_max:
   ylim_min:
+
+# Automatic pre-selection of the flux windows, to check on the plot.
+# Remove a line to use its default.
+Preselect:
+  enabled: true
+  jump_threshold: 15 # break when the rate of change > 15 x noise (chamber placed/lifted)
+  dead_time: 60      # s skipped after each break (chamber settling)
+  end_margin: 5      # s skipped before each break
+  min_duration: 120  # s, shortest window suggested
+  min_r: 0.9         # minimum |Pearson r| of a suggested window

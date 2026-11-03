@@ -6,6 +6,9 @@ import os
 import pandas as pd
 import yaml
 
+# Cell temperature, temperature inside the analyser and cell pressure
+DIAGNOSTIC_COLUMNS = ["GasT_C", "AmbT_C", "GasP_torr"]
+
 
 def footer_pos(filename: str) -> int:
     """Find footer position in LGR file.
@@ -55,7 +58,8 @@ def read_lgr_data(cfg: dict) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        Data from the LGR file indexed by Time, columns [[CH4]d_ppm, [CO2]d_ppm].
+        Data from the LGR file indexed by Time, columns [[CH4]d_ppm, [CO2]d_ppm]
+        and the DIAGNOSTIC_COLUMNS present in the file.
     """
     # Validate required keys in cfg
     required_keys = ["date", "path_in", "file"]
@@ -82,7 +86,10 @@ def read_lgr_data(cfg: dict) -> pd.DataFrame:
         )
         # Strip whitespace from column names
         data.columns = [item.strip() for item in data.columns]
-        data = data.loc[:, ["Time", "[CH4]d_ppm", "[CO2]d_ppm"]]
+        # Instrument diagnostics, kept to check the measurements (the flux
+        # uses the chamber temperature and pressure from the configuration)
+        diagnostics = [c for c in DIAGNOSTIC_COLUMNS if c in data.columns]
+        data = data.loc[:, ["Time", "[CH4]d_ppm", "[CO2]d_ppm", *diagnostics]]
     except FileNotFoundError:
         raise FileNotFoundError(f"The file {filename} does not exist.")
     except ValueError as e:

@@ -6,6 +6,7 @@ import os
 import pandas as pd
 
 from src.processing_data import GAS_COLUMNS
+from src.read_data import DIAGNOSTIC_COLUMNS
 
 
 def write_excelres(data, results, cfg):
@@ -21,9 +22,10 @@ def write_excelres(data, results, cfg):
     with pd.ExcelWriter(
         excelpath, datetime_format="mmm d yyyy hh:mm:ss", engine="xlsxwriter"
     ) as writer:
-        # Raw LGR data of each flux
+        # Raw LGR data of each flux, with the instrument diagnostics
+        columns = [vard] + [c for c in DIAGNOSTIC_COLUMNS if c in data.columns]
         for _, res in results.iterrows():
-            window = data[vard].iloc[res["ID start"] : res["ID end"] + 1]
+            window = data[columns].iloc[res["ID start"] : res["ID end"] + 1]
             window.to_excel(writer, sheet_name=f"FID_{res['FID']}")
 
         # Final results
@@ -39,4 +41,5 @@ def write_excelres(data, results, cfg):
         worksheet.set_column("H:I", None, sciformat)  # Slope, Std Error
         worksheet.set_column("J:K", None, floatformat)  # Pearson, Flux
         worksheet.set_column("N:N", None, floatformat)  # Intercept
+        worksheet.set_column("P:R", None, floatformat)  # Diagnostics
     print(f"Results saved in {excelpath}")

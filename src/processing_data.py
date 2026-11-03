@@ -5,6 +5,8 @@ import pandas as pd
 import pyghgaq as pyg
 
 from src.plots import plot_select_points
+from src.preselect import preselect_windows
+from src.read_data import DIAGNOSTIC_COLUMNS
 
 # LGR columns with the dry mole fractions
 GAS_COLUMNS = {"CH4": "[CH4]d_ppm", "CO2": "[CO2]d_ppm"}
@@ -25,7 +27,13 @@ RESULT_COLUMNS = [
     "Press (hPa)",
     "Intercept (ppm)",
     "N points",
+    "GasT mean (degC)",
+    "AmbT mean (degC)",
+    "GasP mean (torr)",
 ]
+
+# Result column for each diagnostic column of the LGR file
+DIAGNOSTIC_RESULTS = dict(zip(DIAGNOSTIC_COLUMNS, RESULT_COLUMNS[-3:]))
 
 
 def processing_data(data, cfg):
@@ -43,7 +51,10 @@ def processing_data(data, cfg):
     DataFrame
         One row per flux, see calculate_fluxes.
     """
-    windows = plot_select_points(data, cfg)
+    col = GAS_COLUMNS[cfg["variable"]]
+    suggested = preselect_windows(data, col, cfg.get("Preselect"))
+    print(f"{len(suggested)} flux windows pre-selected, check them on the plot.")
+    windows = plot_select_points(data, cfg, suggested)
     return calculate_fluxes(cfg, data, windows)
 
 
@@ -64,7 +75,10 @@ def calculate_fluxes(cfg, data, windows):
     DataFrame
         One row per flux with the columns in RESULT_COLUMNS. The slope is
         fitted against the real time of each sample (pyghgaq.chamber_slope)
-        and the flux uses pyghgaq.chamber_flux.
+        and the flux uses pyghgaq.chamber_flux with the chamber temperature
+        and pressure from the configuration. The means of the LGR cell
+        temperature, analyser temperature and cell pressure are only for
+        checking the measurements.
     """
     temp = cfg["Air"]["Temp"]
     press = cfg["Air"]["Pres"]
@@ -94,6 +108,11 @@ def calculate_fluxes(cfg, data, windows):
                 "Press (hPa)": press,
                 "Intercept (ppm)": fit.intercept.to("ppm").magnitude,
                 "N points": fit.n,
+                **{
+                    name: data[c].iloc[idx1 : idx2 + 1].mean()
+                    for c, name in DIAGNOSTIC_RESULTS.items()
+                    if c in data.columns
+                },
             }
         )
     return pd.DataFrame(rows, columns=RESULT_COLUMNS)
