@@ -55,7 +55,7 @@ def read_lgr_data(cfg: dict) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        Data from the LGR file with columns [Time, CH4_d_ppm, CO2_d_ppm].
+        Data from the LGR file indexed by Time, columns [[CH4]d_ppm, [CO2]d_ppm].
     """
     # Validate required keys in cfg
     required_keys = ["date", "path_in", "file"]
@@ -89,7 +89,7 @@ def read_lgr_data(cfg: dict) -> pd.DataFrame:
         raise ValueError(f"Error reading the file {filename}: {e}")
 
     # Remove the first three rows (e.g., warm-up data)
-    data = data.iloc[3:]
+    data = data.iloc[3:].copy()
 
     # Ensure 'Time' column exists
     if "Time" not in data.columns:
@@ -99,8 +99,8 @@ def read_lgr_data(cfg: dict) -> pd.DataFrame:
     data["Time"] = pd.to_datetime(
         data["Time"].str.strip(), format="%d/%m/%Y %H:%M:%S.%f"
     )
-    # Floor the 'Time' column to seconds
-    data["Time"] = data["Time"].dt.floor("s")
+    # Keep the sub-second timestamps: the LGR logs every ~0.995 s and the
+    # slopes are fitted against the real time of each sample
 
     # Set 'Time' as the index
     data = data.set_index("Time")

@@ -1,4 +1,10 @@
+__pycache__/
 *.pyc
+*.egg-info/
 *.png
 *.log
 *TEST/
+# outputs of the old Plotly/Dash scripts
+plots/
+results.csv
+results.xlsx

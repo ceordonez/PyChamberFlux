@@ -1,15 +1,35 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import numpy as np
 import pandas as pd
-from scipy import stats
+import pyghgaq as pyg
 
 from src.plots import plot_select_points
 
+# LGR columns with the dry mole fractions
+GAS_COLUMNS = {"CH4": "[CH4]d_ppm", "CO2": "[CO2]d_ppm"}
+
+RESULT_COLUMNS = [
+    "FID",
+    "ID start",
+    "ID end",
+    "Time start",
+    "Time end",
+    "Value start (ppm)",
+    "Value end (ppm)",
+    "Slope (ppm/s)",
+    "Std Error",
+    "Pearson",
+    "Flux (mmol/m2/d)",
+    "Temp (degC)",
+    "Press (hPa)",
+    "Intercept (ppm)",
+    "N points",
+]
+
 
 def processing_data(data, cfg):
-    """Process data.
+    """Select the flux windows interactively and calculate the fluxes.
 
     Parameters
     ----------
@@ -20,87 +40,60 @@ def processing_data(data, cfg):
 
     Returns
     -------
-    TODO
+    DataFrame
+        One row per flux, see calculate_fluxes.
     """
-    pts_sel = plot_select_points(data, cfg)
-
-    results, p1 = calculate_fluxes(cfg, data, pts_sel)
-
-    return results, p1
+    windows = plot_select_points(data, cfg)
+    return calculate_fluxes(cfg, data, windows)
 
 
-def calculate_fluxes(cfg, data, pts):
+def calculate_fluxes(cfg, data, windows):
+    """Fit a line to each window and convert the slope to a flux.
 
+    Parameters
+    ----------
+    cfg: dictionary
+        Configuration information
+    data: DataFrame
+        LGR data with a DatetimeIndex
+    windows: list of (int, int)
+        Positions of the first and last sample of each flux
+
+    Returns
+    -------
+    DataFrame
+        One row per flux with the columns in RESULT_COLUMNS. The slope is
+        fitted against the real time of each sample (pyghgaq.chamber_slope)
+        and the flux uses pyghgaq.chamber_flux.
+    """
     temp = cfg["Air"]["Temp"]
     press = cfg["Air"]["Pres"]
     vol = cfg["Chamber"]["Volume"]
     area = cfg["Chamber"]["Area"]
-    var = cfg["variable"]
+    col = GAS_COLUMNS[cfg["variable"]]
 
-    temp_k = temp + 273.15
-    m = 8.31451 * temp_k / (press * 100) * 1000  # Molar Volume (L/mol)
-    itime = data.index.values
-    time = data.index.to_pydatetime().tolist()
-
-    # Selecting variables to process
-    if var == "CH4":
-        var = "[CH4]d_ppm"
-    elif var == "CO2":
-        var = "[CO2]d_ppm"
-    # cdata = data[var]
-    # Create matrix to save the results
-    # Add results to matrix
-    p1 = []
-    idxs1 = []
-    idxs2 = []
-    tstart = []
-    tend = []
-    vstart = []
-    vend = []
-    slopes = []
-    vres = []
-    pearson = []
-    fluxes = []
-    fids = []
-
-    for pt in range(len(pts[0][::2])):
-
-        idx1 = int(abs((itime - pts[0][2 * pt])).argmin())
-        idx2 = int(abs((itime - pts[0][2 * pt + 1])).argmin())
-
-        slope, intercept, r_value, p_value, std_err = stats.linregress(
-            range(len(time[idx1 : idx2 + 1])), data[var][idx1 : idx2 + 1]
+    rows = []
+    for fid, (idx1, idx2) in enumerate(windows, start=1):
+        window = data[col].iloc[idx1 : idx2 + 1]
+        fit = pyg.chamber_slope(window.index, window)
+        flux = pyg.chamber_flux(fit.slope, vol, area, temp, press)
+        rows.append(
+            {
+                "FID": fid,
+                "ID start": idx1,
+                "ID end": idx2,
+                "Time start": window.index[0],
+                "Time end": window.index[-1],
+                "Value start (ppm)": window.iloc[0],
+                "Value end (ppm)": window.iloc[-1],
+                "Slope (ppm/s)": fit.slope.to("ppm/s").magnitude,
+                "Std Error": fit.stderr.to("ppm/s").magnitude,
+                "Pearson": fit.rvalue,
+                "Flux (mmol/m2/d)": flux.to("mmol m^-2 d^-1").magnitude,
+                "Temp (degC)": temp,
+                "Press (hPa)": press,
+                "Intercept (ppm)": fit.intercept.to("ppm").magnitude,
+                "N points": fit.n,
+            }
         )
-        p1.append(intercept)
-        idxs1.append(idx1)
-        idxs2.append(idx2)
-        tstart.append(pd.to_datetime(time[idx1]))
-        tend.append(pd.to_datetime(time[idx2]))
-        vstart.append(data.iloc[idx1][var])
-        vend.append(data.iloc[idx2][var])
-        slopes.append(slope)
-        vres.append(std_err)
-        pearson.append(r_value)
-        fluxes.append(slope * vol / (m * area) * 86.4)
-        fids.append(pt + 1)
-
-    data = {
-        "FID": fids,
-        "ID start": idxs1,
-        "ID end": idxs2,
-        "Time start": tstart,
-        "Time end": tend,
-        "Value start (ppm)": vstart,
-        "Value end (ppm)": vend,
-        "Slope (ppm/s)": slopes,
-        "Std Error": vres,
-        "Pearson": pearson,
-        "Flux (mmol/m2/d)": fluxes,
-        "Temp (degC)": temp,
-        "Press (hPa)": press,
-    }
-    points = pd.DataFrame(
-        data,
-        index=range(len(pts[0][::2])),
-    )
-    return points, p1
+    return pd.DataFrame(rows, columns=RESULT_COLUMNS)
