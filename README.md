@@ -31,6 +31,8 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
    ```
 
    Windows users can also double-click `main.py` to get the dialog, if `.venv` is the Python that opens `.py` files (otherwise use `uv run main.py`).
+
+   To try it, run `uv run main.py examples/example.txt`: about one hour of LGR data with three chamber deployments.
 3. Check the flux windows on the plot of each file (CH<sub>4</sub> on top, CO<sub>2</sub> below, on the same time axis; clicks work on both). The pre-selected windows are shaded and labelled with their number, the Pearson r of each gas and the CH<sub>4</sub> bubbles found (the excluded part of the CH<sub>4</sub> line is drawn in violet). Points are paired in time order (1st–2nd, 3rd–4th, ...).
    - **Left click**: add a point.
    - **Right click**: remove the nearest point. To move the edge of a window, right-click the edge and then left-click the new position.
