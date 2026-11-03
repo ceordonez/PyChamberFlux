@@ -7,87 +7,133 @@ import pandas as pd
 import yaml
 
 
-def footer_pos(filename):
+def footer_pos(filename: str) -> int:
     """Find footer position in LGR file.
 
     Parameters
     ----------
-    filename: String
-        File name of LGR file
+    filename : str
+        File name of LGR file.
 
     Returns
     -------
-    ifooter: Int
-        Starting line numnber of the footer of LGR file
+    int
+        Starting line number of the footer of the LGR file.
     """
-    with open(filename) as z:
+    # Ensure the file exists before attempting to open it
+    if not os.path.isfile(filename):
+        raise FileNotFoundError(f"The file '{filename}' does not exist.")
+
+    with open(filename, "r") as z:
         i = 0
-        foot = False
+        ib = None  # Initialize ib to avoid potential unbound variable error
         for line in z:
             if line.startswith("-----B"):
                 ib = i
-                foot = True
             i += 1
-        if foot:
+
+        # Check if the footer marker was found
+        if ib is not None:
             ifooter = i - ib
         else:
             ifooter = 0
+
     return ifooter
 
 
-def read_data(cfg):
+def read_lgr_data(cfg: dict) -> pd.DataFrame:
     """Read LGR file.
 
     Parameters
     ----------
-    cfg: dictionary
-        Configuration information
+    cfg: dict
+        Configuration dictionary with the following keys:
+        - "date" (str): Date string for the file path.
+        - "path_in" (str): Base directory for the input file.
+        - "file" (str): Name of the input file without extension.
 
     Returns
     -------
-    data: DataFrame
-        Data in lgr_file
+    pd.DataFrame
+        Data from the LGR file with columns [Time, CH4_d_ppm, CO2_d_ppm].
     """
-    # filename = os.path.join(path, lake, 'Data', 'LGR', date, txtfile+'.txt')
+    # Validate required keys in cfg
+    required_keys = ["date", "path_in", "file"]
+    for key in required_keys:
+        if key not in cfg:
+            raise KeyError(f"Missing required configuration key: {key}")
+
     date = cfg["date"]
     path = cfg["path_in"]
     inputfile = cfg["file"]
 
     filename = os.path.join(path, date, inputfile + ".txt")
+
+    # Ensure footer_pos function is defined or imported
     ifoot = footer_pos(filename)
 
-    ## Reading column 0 is time, column 7 [CH4]d_ppm and column 9 [CO2]d_ppm
-    data = pd.read_csv(
-        filename,
-        sep=",",
-        header=1,
-        skipfooter=ifoot,
-        parse_dates=[0],
-        usecols=[0, 7, 9],
-        engine="python",
+    try:
+        data = pd.read_csv(
+            filename,
+            sep=",",
+            header=1,
+            skipfooter=ifoot,
+            engine="python",
+        )
+        # Strip whitespace from column names
+        data.columns = [item.strip() for item in data.columns]
+        data = data.loc[:, ["Time", "[CH4]d_ppm", "[CO2]d_ppm"]]
+    except FileNotFoundError:
+        raise FileNotFoundError(f"The file {filename} does not exist.")
+    except ValueError as e:
+        raise ValueError(f"Error reading the file {filename}: {e}")
+
+    # Remove the first three rows (e.g., warm-up data)
+    data = data.iloc[3:]
+
+    # Ensure 'Time' column exists
+    if "Time" not in data.columns:
+        raise KeyError("The required 'Time' column is missing in the data.")
+
+    # Parse the "Time" column as datetime
+    data["Time"] = pd.to_datetime(
+        data["Time"].str.strip(), format="%d/%m/%Y %H:%M:%S.%f"
     )
-    data = data.iloc[3:]  # get rid off the data when LGR is turn on
-    cols = data.columns.values
-    data.columns = [item.strip() for item in cols]
-    data.Time = data.Time.dt.floor("s")
-    data.set_index("Time", inplace=True)
+    # Floor the 'Time' column to seconds
+    data["Time"] = data["Time"].dt.floor("s")
+
+    # Set 'Time' as the index
+    data = data.set_index("Time")
+
     return data
 
 
-def read_config(filename):
+def read_config(filename: str) -> dict:
     """Read configuration file.
 
     Parameters
     ----------
-    filename : string
-        File name of the configuration process file
+    filename : str
+        File name of the configuration process file.
 
     Returns
     -------
-    conf_file: dictionary
-        Configuration data
-
+    dict
+        Configuration data as a dictionary.
     """
+    # Validate that the filename is not empty
+    if not filename:
+        raise ValueError("The filename must not be empty.")
+
+    # Ensure the file exists before attempting to open it
+    if not os.path.isfile(filename):
+        raise FileNotFoundError(f"The file '{filename}' does not exist.")
+
+    # Read the configuration file safely
     with open(filename, "r") as file:
-        conf_file = yaml.safe_load(file)
+        try:
+            conf_file = yaml.safe_load(file)
+        except yaml.YAMLError as e:
+            raise ValueError(f"Error parsing the YAML file '{filename}': {e}")
+
     return conf_file

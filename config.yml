@@ -1,15 +1,15 @@
 #
 # PATHS
-path_in: '/home/cesar/Dropbox/Cesar/PostDoc/Projects/Gambia/Data/2025/Raw/LGR'
-# path_out: '/home/cesar/Dropbox/Cesar/PostDoc/Projects/Gambia/Data/2025/Processed'
-path_out: './TEST'
+path_in: '/home/cesar/Dropbox/Cesar/PostDoc/Projects/Gambia/ONR/Data/2025/Raw/LGR'
+path_out: '/home/cesar/Dropbox/Cesar/PostDoc/Projects/Gambia/ONR/Data/2025/Processed'
+# path_out: './TEST'
 
 
 # Site and variable to process
 site: 'Gambia'
-date: '2025-01-11'
-file: 'gga_2025-01-11_f0000'
-variable: 'CO2'
+date: '2025-01-21'
+file: 'gga_2025-01-21_f0001'
+variable: 'CH4'
 
 # Location features
 Air:
