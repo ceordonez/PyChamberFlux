@@ -14,5 +14,7 @@ jobs:
           enable-cache: true
       - name: Install
         run: uv sync --locked
+      - name: Lint
+        run: uv run ruff check
       - name: Run tests
         run: uv run pytest -v

@@ -25,8 +25,21 @@ pyghgaq = { git = "https://github.com/ceordonez/PyGHGaq", branch = "main" }
 [dependency-groups]
 dev = [
     "pytest>=9.2.0",
+    "ruff>=0.17.3",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# pyflakes, pycodestyle errors/warnings, import order
+select = ["F", "E", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# conftest sets the matplotlib backend before the other imports
+"tests/conftest.py" = ["E402"]
+"tests/test_fluxes.py" = ["E402"]
