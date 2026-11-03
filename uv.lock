@@ -662,7 +662,7 @@ dev = [{ name = "pytest", specifier = ">=9.2.0" }]
 [[package]]
 name = "pyghgaq"
 version = "0.1.5"
-source = { git = "https://github.com/ceordonez/PyGHGaq?branch=main#ffb4a286df36898ce97f5d8e8cfa6b2dba09a676" }
+source = { git = "https://github.com/ceordonez/PyGHGaq?branch=main#6e86ef9085f121ea55cd06e2d1f7be795396deea" }
 dependencies = [
     { name = "numpy" },
     { name = "pandas" },

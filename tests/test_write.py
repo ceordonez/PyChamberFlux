@@ -24,7 +24,7 @@ def test_result_files(cfg, example_data):
     ]
     results = pd.read_csv(folder / "results.csv", parse_dates=["Time start"])
     assert len(results) == 3  # one row per flux, both gases in it
-    assert results["CO2 flux (mmol/m2/d)"].iloc[0] == pytest.approx(57.122299352552396)
+    assert results["CO2 flux (mmol/m2/d)"].iloc[0] == pytest.approx(57.11912105888556)
     assert results["File"].unique().tolist() == ["example.txt"]
 
     samples = pd.read_csv(folder / "samples.csv")

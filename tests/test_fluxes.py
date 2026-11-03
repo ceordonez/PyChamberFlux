@@ -12,12 +12,12 @@ from src.processing_data import bubble_table, calculate_fluxes
 # unless the method changes on purpose)
 EXPECTED = {
     # (flux, gas): (slope ppm/s, diffusive flux mmol/m2/d, samples)
-    (1, "CH4"): (0.00022271154967307637, 0.10297464744954912, 380),
-    (1, "CO2"): (0.12354298970461795, 57.122299352552396, 380),
-    (2, "CH4"): (0.00030171855554596576, 0.13950494229841465, 413),
-    (2, "CO2"): (0.17728121701344923, 81.96912485313216, 413),
-    (3, "CH4"): (0.0006064347805997748, 0.28039591042797074, 821),
-    (3, "CO2"): (0.2838241447545379, 131.23114309370524, 821),
+    (1, "CH4"): (0.00022271154967307637, 0.10296891792406532, 380),
+    (1, "CO2"): (0.12354298970461795, 57.11912105888556, 380),
+    (2, "CH4"): (0.00030171855554596576, 0.1394971802216141, 413),
+    (2, "CO2"): (0.17728121701344923, 81.96456407820978, 413),
+    (3, "CH4"): (0.0006064347805997748, 0.2803803091556757, 821),
+    (3, "CO2"): (0.2838241447545379, 131.22384137238603, 821),
 }
 
 
@@ -35,12 +35,11 @@ def test_example_fluxes_do_not_change(cfg, example_data):
 
 
 def test_flux_formula_by_hand(cfg):
-    # F = dC/dt * P V / (R T A), in mmol m-2 d-1, with R = 8.314 as in
-    # pyghgaq (data/constant.yml; the exact value 8.314462618 is 0.006 % higher)
+    # F = dC/dt * P V / (R T A), in mmol m-2 d-1, with the exact gas constant
     slope, volume, area, temp, pres = 2.5e-4, 16.76e-3, 0.126, 30.0, 1014.0
-    by_hand = slope * 1e-6 * pres * 100 * volume / (8.314 * (temp + 273.15) * area)
+    by_hand = slope * 1e-6 * pres * 100 * volume / (8.314462618 * (temp + 273.15) * area)
     by_hand *= 86400 * 1000
-    assert to_flux(cfg, slope) == pytest.approx(by_hand, rel=1e-6)
+    assert to_flux(cfg, slope) == pytest.approx(by_hand, rel=1e-12)
 
 
 def test_flux_uses_given_temperature_and_pressure(cfg):
