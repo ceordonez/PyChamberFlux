@@ -1,4 +1,4 @@
-# LGR surface Fluxes
+# PyChamberFlux
 
 Interactive tool to calculate floating chamber fluxes of CH<sub>4</sub> and CO<sub>2</sub> from LGR (Los Gatos Research) analyser files. Both gases are processed from one selection of the chamber deployments, and CH<sub>4</sub> bubbles (ebullition) are separated from the diffusive flux. The slope and flux calculations use [PyGHGaq](https://github.com/ceordonez/PyGHGaq) (`chamber_slope` and `chamber_flux`).
 
