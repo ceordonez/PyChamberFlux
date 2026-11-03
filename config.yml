@@ -1,10 +1,12 @@
 #
 # PATHS
 # path_in is only where the file dialog opens; the LGR files are given when
-# running: python main.py FILE_OR_FOLDER (or chosen in the dialog)
-path_in: '/home/cesar/Dropbox/Cesar/PostDoc/Projects/Gambia/ONR/Data/2025/Raw/LGR'
-path_out: '/home/cesar/Dropbox/Cesar/PostDoc/Projects/Gambia/ONR/Data/2025/Processed'
-# path_out: './TEST'
+# running: uv run main.py FILE_OR_FOLDER (or chosen in the dialog).
+# Relative paths are relative to the folder you run the command from.
+# Tip: copy this file to config.local.yml (not tracked by git) for your own
+# paths; main.py uses config.local.yml when it exists.
+path_in: './examples'
+path_out: './results'
 
 # Site name, used in the output file names
 site: 'Gambia'

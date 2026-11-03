@@ -5,3 +5,5 @@ __pycache__/
 *.log
 *TEST/
 .venv/
+config.local.yml
+results/

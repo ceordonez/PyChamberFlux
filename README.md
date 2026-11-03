@@ -11,7 +11,7 @@ Interactive tool to calculate floating chamber fluxes of CH<sub>4</sub> and CO<s
    cd PyChamberFlux
    ```
 
-2. In `config.yml`, set at least `path_out` (where the results go), `site`, and the `Air` and `Chamber` values of your chamber.
+2. Copy `config.yml` to `config.local.yml` (your own settings, not tracked by git) and set at least `path_out` (where the results go; `./results` by default), `site`, and the `Air` and `Chamber` values of your chamber.
 3. Try it with the example file (the first run installs the dependencies):
 
    ```sh
@@ -35,7 +35,7 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
 
 ## Usage
 
-1. Set up `config.yml` once per site or campaign:
+1. Set up the configuration once per site or campaign, in `config.local.yml` (a copy of `config.yml`; used automatically when it exists and not tracked by git, so `git pull` never overwrites it):
    - `path_out`: folder for the results; `path_in`: folder where the file dialog opens.
    - `site`: used in the output file names.
    - `Air`: air temperature (°C) and pressure (hPa) in the chamber.

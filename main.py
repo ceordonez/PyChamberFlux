@@ -22,6 +22,12 @@ from src.write import results_folder, saved_windows, write_results
 HERE = Path(__file__).resolve().parent
 
 
+def default_config():
+    """config.local.yml (personal, not tracked by git) if it exists, else config.yml."""
+    local = HERE / "config.local.yml"
+    return local if local.exists() else HERE / "config.yml"
+
+
 def find_files(paths):
     """LGR files from the arguments: files as given, folders -> their .txt files."""
     files = []
@@ -101,8 +107,9 @@ def main(argv=None):
         help="LGR files or folders (all .txt files). Without paths, a dialog opens.",
     )
     parser.add_argument(
-        "-c", "--config", default=str(HERE / "config.yml"),
-        help="configuration file (default: config.yml next to main.py)",
+        "-c", "--config", default=str(default_config()),
+        help="configuration file (default: config.local.yml next to main.py if it "
+             "exists, otherwise config.yml)",
     )
     args = parser.parse_args(argv)
 
@@ -110,6 +117,7 @@ def main(argv=None):
         cfg = validate_config(read_config(args.config), args.config)
     except (ConfigError, FileNotFoundError, ValueError) as e:
         sys.exit(str(e))
+    print(f"Configuration: {args.config}")
     files = find_files(args.paths) if args.paths else ask_files(cfg.get("path_in"))
     if not files:
         print("No files to process.")
