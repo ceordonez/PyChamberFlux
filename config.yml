@@ -20,6 +20,10 @@ Plot:
   ylim_max: # CH4 axis of the selection plot
   ylim_min:
 
+# Results are saved as CSV files; set excel: true to also get an Excel file
+Output:
+  excel: false
+
 # Automatic pre-selection of the flux windows, to check on the plot.
 # Remove a line to use its default.
 Preselect:

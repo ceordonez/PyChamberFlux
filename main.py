@@ -16,7 +16,7 @@ from pathlib import Path
 from src.plots import plot_data
 from src.processing_data import processing_data
 from src.read_data import read_config, read_lgr_file
-from src.write import write_excelres
+from src.write import write_results
 
 HERE = Path(__file__).resolve().parent
 
@@ -74,7 +74,7 @@ def process_file(path, cfg):
 
     name = path.stem
     plot_data(data, results, cfg, name)
-    write_excelres(data, results, cfg, name)
+    write_results(data, results, cfg, name, source=path.name)
 
 
 def main(argv=None):

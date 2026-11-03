@@ -20,6 +20,7 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
    - `Air`: air temperature (°C) and pressure (hPa) in the chamber.
    - `Chamber`: volume (L, including tubing and analyser) and area (m²).
    - `Plot`: optional y limits of the CH<sub>4</sub> axis of the selection plot.
+   - `Output`: `excel: true` to also save the results as an Excel file (CSV only by default).
    - `Preselect` and `Bubbles`: see below. Remove a line to use its default.
 2. Run:
 
@@ -67,12 +68,29 @@ Check the per-flux figures: the excluded samples are open violet circles and the
 
 ## Results
 
-For each LGR file:
+For each LGR file, a folder `path_out/<site>_<file>/` with:
 
-- `path_out/<site>_<file>.xlsx`:
-  - `Results`: one row per flux and gas (`FID`, `Gas`): start/end time and value, slope (ppm s⁻¹) and its standard error, Pearson r, diffusive flux (mmol m⁻² d⁻¹), for CH<sub>4</sub> the number of bubbles and the total and ebullitive fluxes, temperature, pressure, intercept, number of samples used, and the means of the LGR cell temperature (`GasT_C`), the temperature inside the analyser (`AmbT_C`) and the cell pressure (`GasP_torr`). The LGR temperatures and pressure are only to check the analyser (e.g. the cell pressure should stay at ~140 torr); they are not the chamber conditions and are not used for the flux.
-  - `FID_n`: the samples of each flux (both gases and the LGR diagnostics) and whether each CH<sub>4</sub> sample was used in the fit.
-- `path_out/Figures/Figures_<date>/`: one figure per flux (CH<sub>4</sub> and CO<sub>2</sub> with the fitted lines) and one figure with the whole file and the selected windows.
+- **`results.csv`**: one row per flux (chamber deployment), the same for both gases:
+  - `File`, `Flux` number, `Time start`, `Time end`, `Duration (s)`;
+  - CH<sub>4</sub>: diffusive flux and its standard error, ebullitive and total flux (mmol m⁻² d⁻¹), number of bubbles;
+  - CO<sub>2</sub>: flux and its standard error (mmol m⁻² d⁻¹);
+  - for each gas: slope (ppm s⁻¹) and its standard error, Pearson r, intercept, first and last value, number of samples used and a `flag` when the flux should be checked (|r| < `min_r` or window shorter than `min_duration`, from `Preselect`; empty when it looks fine);
+  - the means of the LGR cell temperature (`GasT_C`), the temperature inside the analyser (`AmbT_C`) and the cell pressure (`GasP_torr`), and the row numbers of the window in the LGR file (`ID start`, `ID end`). The LGR temperatures and pressure are only to check the analyser (e.g. the cell pressure should stay at ~140 torr); they are not the chamber conditions and are not used for the flux.
+
+  The standard errors of the fluxes are those of the slopes, converted to fluxes; they do not include the uncertainty of the chamber volume, area, temperature or pressure.
+- **`bubbles.csv`**: one row per CH<sub>4</sub> jump removed from the fit: flux number, time, jump (ppm) and its ebullitive flux. Bubbles too close together to fit a line between them give one jump (`N bubbles merged`).
+- **`samples.csv`**: the samples of each flux (`Flux` column): time, seconds since the start of the window, each gas with its fitted line and whether the sample was used in the fit, and the LGR diagnostics.
+- **`settings.yml`**: the file, the processing date, the PyChamberFlux and pyghgaq versions, the chamber and air conditions and the `Preselect` and `Bubbles` parameters used (including defaults).
+- **`<site>_<file>.xlsx`** (only with `Output: excel: true`): the same tables in one formatted file, one sheet per flux.
+
+All the files processed for a site are collected in `path_out/<site>_fluxes.csv` (the `results.csv` rows) and `path_out/<site>_bubbles.csv`, sorted by time. Processing a file again replaces its rows. To read them in Python:
+
+```python
+import pandas as pd
+fluxes = pd.read_csv("Gambia_fluxes.csv", parse_dates=["Time start", "Time end"])
+```
+
+Figures in `path_out/Figures/Figures_<date>/`: one per flux (CH<sub>4</sub> and CO<sub>2</sub> with the fitted lines) and one with the whole file and the selected windows.
 
 ## Method
 

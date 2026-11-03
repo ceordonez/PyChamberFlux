@@ -4,8 +4,4 @@ __pycache__/
 *.png
 *.log
 *TEST/
-# outputs of the old Plotly/Dash scripts
-plots/
-results.csv
-results.xlsx
 .venv/
