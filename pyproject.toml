@@ -3,6 +3,7 @@ name = "pychamberflux"
 version = "0.1.0"
 description = "Interactive floating chamber CH4 and CO2 fluxes (diffusive and ebullitive) from LGR analyser files"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "matplotlib",
@@ -20,3 +21,12 @@ package = false
 [tool.uv.sources]
 # pyghgaq 0.1.5 is not on PyPI yet; remove this once it is released there
 pyghgaq = { git = "https://github.com/ceordonez/PyGHGaq", branch = "main" }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
