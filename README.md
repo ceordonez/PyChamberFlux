@@ -58,7 +58,10 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
    uv run main.py -c other_site.yml FILE  # another configuration file
    uv run main.py -n path/to/LGR          # only the files not in <site>_fluxes.csv yet
    uv run main.py --batch path/to/LGR     # recalculate processed files with their saved windows
+   uv run main.py --no-confirm FILE       # without the settings window
    ```
+
+   A window first shows the settings that change between campaigns (site, output folder, chamber volume and area, air temperature and pressure, field log, analyser precision), so that you check them before processing. Edit a value to use it for this run; tick *Save changes* to also write it to the configuration file (its comments and other settings are kept). Enter starts, Escape cancels. Without a display (e.g. on a server) the values are printed instead; `--no-confirm` skips the window.
 
    Windows users can also double-click `main.py` to get the dialog, if `.venv` is the Python that opens `.py` files (otherwise use `uv run main.py`).
 

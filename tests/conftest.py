@@ -46,3 +46,11 @@ def synthetic_data(n=600, slope_ch4=1e-4, slope_co2=0.1, step=None, step_at=300,
     co2 = 420 + slope_co2 * seconds + rng.normal(0, 0.2, n)
     index = pd.Timestamp("2025-01-11 12:00:00") + pd.to_timedelta(seconds, unit="s")
     return pd.DataFrame({GAS_COLUMNS["CH4"]: ch4, GAS_COLUMNS["CO2"]: co2}, index=index)
+
+
+@pytest.fixture(autouse=True)
+def no_settings_window(monkeypatch):
+    """The settings window is tested on its own (test_confirm.py)."""
+    import main
+
+    monkeypatch.setattr(main, "confirm_settings", lambda cfg, filename: cfg)

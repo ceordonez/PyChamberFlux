@@ -10,6 +10,7 @@ Usage:
     uv run main.py -n FOLDER           only the files not processed yet
     uv run main.py --batch FOLDER      recalculate the files processed before, with
                                        their saved windows, without the plot window
+    uv run main.py --no-confirm FILE   without the window to check the settings
 """
 
 import argparse
@@ -17,6 +18,7 @@ import sys
 from pathlib import Path
 
 from src.config import ConfigError, validate_config
+from src.confirm import confirm_settings
 from src.plots import plot_data
 from src.processing_data import calculate_fluxes, processing_data
 from src.read_data import read_config, read_lgr_file
@@ -140,6 +142,10 @@ def main(argv=None):
         help="recalculate the files processed before with their saved windows, without "
              "the plot window (e.g. after changing the configuration)",
     )
+    parser.add_argument(
+        "--no-confirm", action="store_true",
+        help="do not show the window to check the settings before processing",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -147,6 +153,11 @@ def main(argv=None):
     except (ConfigError, FileNotFoundError, ValueError) as e:
         sys.exit(str(e))
     print(f"Configuration: {args.config}")
+    if not args.no_confirm:
+        cfg = confirm_settings(cfg, args.config)
+        if cfg is None:
+            print("Cancelled.")
+            return
     files = find_files(args.paths) if args.paths else ask_files(cfg.get("path_in"))
     if args.new_only:
         done = processed_files(cfg)

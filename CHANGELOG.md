@@ -2,6 +2,12 @@
 
 All notable changes to PyChamberFlux. Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Window to check (and edit) the settings that change between campaigns before processing; changes apply to the run and are saved to the configuration file only on request, keeping its comments. `--no-confirm` skips it.
+
 ## [0.2.0] - 2026-11-03
 
 First release as PyChamberFlux (formerly LGR_SurfFlux).
