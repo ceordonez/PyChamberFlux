@@ -13,9 +13,13 @@ selection plot for the user to check and edit.
 
 import numpy as np
 
+from src.fitting import GAS_COLUMNS
+from src.jumps import find_jumps
+
 # Defaults, can be overridden in the "Preselect" section of config.yml
 DEFAULTS = {
     "enabled": True,
+    "gas": "CO2",  # gas used to find the deployments (CH4 bubbles would split them)
     "jump_threshold": 15,  # break if rate of change > jump_threshold x noise
     "dead_time": 60,  # s skipped after each break
     "end_margin": 5,  # s skipped before each break
@@ -23,21 +27,17 @@ DEFAULTS = {
     "min_r": 0.9,  # minimum |Pearson r| of a kept window
 }
 
-SMOOTH_SAMPLES = 5  # rolling median used to find the breaks
-BREAK_GAP = 5  # breaks closer than this (samples) are one break
 START_STEP = 10  # s, step when searching the start of the linear part
 R2_TOLERANCE = 0.005  # earliest start within this of the best r^2
 
 
-def preselect_windows(data, column, options=None):
+def preselect_windows(data, options=None):
     """Suggest flux windows in an LGR record.
 
     Parameters
     ----------
     data : DataFrame
         LGR data with a DatetimeIndex
-    column : str
-        Gas column used to find the deployments, e.g. "[CH4]d_ppm"
     options : dict, optional
         Overrides for DEFAULTS
 
@@ -51,31 +51,21 @@ def preselect_windows(data, column, options=None):
         return []
 
     seconds = (data.index - data.index[0]).total_seconds().to_numpy()
-    values = data[column].to_numpy(dtype=float)
+    values = data[GAS_COLUMNS[opt["gas"]]].to_numpy(dtype=float)
 
     windows = []
-    for start, end in _segments(seconds, values, data[column], opt):
+    for start, end in _segments(seconds, values, opt):
         window = _linear_part(seconds, values, start, end, opt)
         if window is not None:
             windows.append(window)
     return windows
 
 
-def _segments(seconds, values, series, opt):
+def _segments(seconds, values, opt):
     """Parts of the record between breaks, without dead time and end margin."""
-    smooth = series.rolling(SMOOTH_SAMPLES, center=True, min_periods=1).median()
-    rate = np.gradient(smooth.to_numpy(dtype=float), seconds)
-    deviation = np.abs(rate - np.median(rate))
-    noise = 1.4826 * np.median(deviation)  # robust standard deviation
-    if noise == 0:
-        return [(0, len(values) - 1)]
-
-    jumps = np.flatnonzero(deviation > opt["jump_threshold"] * noise)
     # (first, last) sample of each break; the record edges act as breaks
     breaks = [(-1, -1)]
-    if jumps.size:
-        groups = np.split(jumps, np.flatnonzero(np.diff(jumps) > BREAK_GAP) + 1)
-        breaks += [(g[0], g[-1]) for g in groups]
+    breaks += find_jumps(seconds, values, opt["jump_threshold"])
     breaks.append((len(values), len(values)))
 
     segments = []

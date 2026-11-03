@@ -11,59 +11,87 @@ from matplotlib.dates import date2num
 from matplotlib.widgets import Cursor
 from pandas.plotting import register_matplotlib_converters
 
+from src.fitting import GAS_COLUMNS, fit_window, window_seconds
+
 register_matplotlib_converters()
 # Interactive backend for the point selection, unless one is set explicitly
 if "MPLBACKEND" not in os.environ:
     mpl.use("tkAgg")
 
-GAS_COLUMNS = {"CH4": "[CH4]d_ppm", "CO2": "[CO2]d_ppm"}
 GAS_COLORS = {"CH4": "b", "CO2": "k"}
+BUBBLE_COLOR = "orange"
 MIN_POINTS = 3
 
 
-def plot_data(data, results, cfg):
+def plot_data(data, results, cfg, name):
     """Save one figure per flux and one figure with all the data."""
-    plot_perflux(data, results, cfg)
-    plot_alldata(data, results, cfg)
+    folder = figure_folder(data, cfg)
+    plot_perflux(data, results, cfg, name, folder)
+    plot_alldata(data, results, cfg, name, folder)
 
 
-def _figure_folder(cfg):
-    path_figout = os.path.join(cfg["path_out"], "Figures", "Figures_" + cfg["date"])
+def figure_folder(data, cfg):
+    """path_out/Figures/Figures_<date of the first sample>, created if needed."""
+    date = data.index[0].strftime("%Y-%m-%d")
+    path_figout = os.path.join(cfg["path_out"], "Figures", "Figures_" + date)
     os.makedirs(path_figout, exist_ok=True)
     return path_figout
 
 
-def plot_select_points(data, cfg, preselected=()):
+def _window_label(data, i, j, n, bubble_options):
+    """Number, r of each gas and number of CH4 bubbles of a window."""
+    if j - i + 1 < MIN_POINTS:
+        return f"{n}: too short", []
+    lines = [str(n)]
+    bubbles = []
+    for gas in ("CH4", "CO2"):
+        try:
+            fit = fit_window(data, i, j, gas, bubble_options)
+        except ValueError:
+            lines.append(f"{gas} ?")
+            continue
+        text = f"{gas} r={fit['rvalue']:.2f}"
+        if fit["bubbles"]:
+            bubbles = [(i + a, i + b) for a, b in fit["bubbles"]]
+            text += f" ({len(bubbles)} bubble{'s' if len(bubbles) > 1 else ''})"
+        lines.append(text)
+    return "\n".join(lines), bubbles
+
+
+def plot_select_points(data, cfg, preselected=(), title=""):
     """Select the start and end of each flux on the plot.
 
-    Points are paired in time order (1st-2nd, 3rd-4th, ...) and each window
-    is shaded and labelled with its number and Pearson r.
+    CH4 is on the left axis and CO2 on the right axis. Points are paired in
+    time order (1st-2nd, 3rd-4th, ...); each window is shaded and labelled
+    with its number, the Pearson r of each gas and the CH4 bubbles found
+    (marked in orange).
 
     Left click: add the nearest sample.
     Right click: remove the nearest point (to move an edge: right click it,
     then left click the new position).
     Key "d" or Delete: remove the window under the mouse.
     Middle click or closing the window: finish.
+    Clicks are ignored while the zoom or pan tool of the toolbar is active.
 
     Parameters
     ----------
     preselected : list of (int, int)
         Windows shown at the start (e.g. from preselect_windows)
+    title : str
+        Figure title, e.g. the file name
 
     Returns
     -------
     list of (int, int)
         Positions of the first and last sample of each flux, in time order.
     """
-    var = cfg["variable"]
-    other = "CO2" if var == "CH4" else "CH4"
-    ylim_min = cfg["Plot"]["ylim_min"]
-    ylim_max = cfg["Plot"]["ylim_max"]
+    plot_cfg = cfg.get("Plot") or {}
+    bubble_options = cfg.get("Bubbles")
 
     xnum = date2num(data.index)
-    y = data[GAS_COLUMNS[var]].to_numpy()
+    y = data[GAS_COLUMNS["CH4"]].to_numpy()
 
-    fig = plt.figure(figsize=(15, 5))
+    fig = plt.figure(figsize=(15, 6))
     ax1 = fig.add_subplot(111, facecolor="#FFFFCC")
     ax2 = ax1.twinx()
     ax2.yaxis.tick_left()
@@ -71,16 +99,18 @@ def plot_select_points(data, cfg, preselected=()):
     ax1.yaxis.set_label_position("right")
     ax2.yaxis.set_label_position("left")
 
-    # Gas to process on the left axis, the other gas on the right axis
-    ax1.plot(data[GAS_COLUMNS[other]], GAS_COLORS[other], linewidth=3)
-    ax2.plot(data[GAS_COLUMNS[var]], GAS_COLORS[var], linewidth=3)
-    ax1.set_ylabel(f"{other} (ppm)")
-    ax2.set_ylabel(f"{var} (ppm)")
-    for ax, gas, side in ((ax1, other, "right"), (ax2, var, "left")):
+    # CH4 on the left axis (ax2, on top: it receives the clicks), CO2 on the right
+    ax1.plot(data[GAS_COLUMNS["CO2"]], GAS_COLORS["CO2"], linewidth=3)
+    ax2.plot(data[GAS_COLUMNS["CH4"]], GAS_COLORS["CH4"], linewidth=3)
+    ax1.set_ylabel("CO2 (ppm)")
+    ax2.set_ylabel("CH4 (ppm)")
+    for ax, gas, side in ((ax1, "CO2", "right"), (ax2, "CH4", "left")):
         ax.yaxis.label.set_color(GAS_COLORS[gas])
         ax.spines[side].set_color(GAS_COLORS[gas])
         ax.tick_params(axis="y", which="both", colors=GAS_COLORS[gas])
-    ax2.set_ylim(ylim_min, ylim_max)
+    ax2.set_ylim(plot_cfg.get("ylim_min"), plot_cfg.get("ylim_max"))
+    if title:
+        fig.suptitle(title)
     ax2.set_title(
         "Left click: add point   Right click: remove nearest point   "
         "d: delete window under mouse   Middle click: finish",
@@ -97,21 +127,31 @@ def plot_select_points(data, cfg, preselected=()):
             artist.remove()
         window_artists.clear()
         for n, (i, j) in enumerate(zip(selected[::2], selected[1::2]), start=1):
+            label, bubbles = _window_label(data, i, j, n, bubble_options)
             window_artists.append(ax2.axvspan(xnum[i], xnum[j], color="g", alpha=0.2))
-            r = np.corrcoef(xnum[i : j + 1], y[i : j + 1])[0, 1] if j - i >= 2 else np.nan
+            for a, b in bubbles:
+                window_artists.append(
+                    ax2.axvspan(xnum[a], xnum[b], color=BUBBLE_COLOR, alpha=0.6)
+                )
             window_artists.append(
                 ax2.text(
-                    (xnum[i] + xnum[j]) / 2, 0.98, f"{n}: r={r:.2f}",
+                    (xnum[i] + xnum[j]) / 2, 0.98, label,
                     transform=ax2.get_xaxis_transform(), ha="center", va="top",
                     fontsize=8, color="g",
                 )
             )
         fig.canvas.draw_idle()
 
+    def toolbar_active():
+        toolbar = getattr(fig.canvas, "toolbar", None)
+        return toolbar is not None and bool(getattr(toolbar, "mode", ""))
+
     def on_click(event):
         if event.button == MouseButton.MIDDLE:
             plt.close(fig)
             return
+        if toolbar_active():
+            return  # zooming or panning
         if event.inaxes is None or event.xdata is None:
             return  # click outside the plot
         idx = int(np.abs(xnum - event.xdata).argmin())
@@ -166,50 +206,63 @@ def points_to_windows(points):
     return windows
 
 
-def plot_perflux(data, results, cfg):
-    """One figure per flux with the data and the fitted line."""
-    var = cfg["variable"]
-    vard = GAS_COLUMNS[var]
-    path_figout = _figure_folder(cfg)
+def plot_perflux(data, results, cfg, name, folder):
+    """One figure per flux: CH4 (with bubbles) and CO2 with the fitted lines."""
+    bubble_options = cfg.get("Bubbles")
+    for fid, res in results.groupby("FID", sort=True):
+        idx1 = int(res["ID start"].iloc[0])
+        idx2 = int(res["ID end"].iloc[0])
+        seconds = window_seconds(data, idx1, idx2)
 
-    for _, res in results.iterrows():
-        window = data[vard].iloc[res["ID start"] : res["ID end"] + 1]
-        seconds = (window.index - window.index[0]).total_seconds()
-        fitted = res["Intercept (ppm)"] + res["Slope (ppm/s)"] * seconds
-        text = (
-            f"$f(x)$ = {res['Slope (ppm/s)']:.2E}$x$ + {res['Intercept (ppm)']:.2f}\n"
-            f"r = {res['Pearson']:.2f}\n"
-            f"Flux = {res['Flux (mmol/m2/d)']:.3g} mmol m$^{{-2}}$ d$^{{-1}}$"
-        )
-        figf = plt.figure(figsize=(7, 5))
-        axf = figf.add_subplot(111)
-        axf.plot(seconds, window, "o", label="LGR data")
-        axf.plot(seconds, fitted, "k-", label=text)
-        axf.legend()
-        axf.set_xlabel("Time (s)")
-        axf.set_ylabel(vard)
-        figffile = "_".join(
-            [var, cfg["site"], "Flux", str(res["FID"]), cfg["file"] + ".png"]
-        )
-        figf.savefig(os.path.join(path_figout, figffile), format="png", dpi=300)
-        plt.close(figf)
+        fig, axes = plt.subplots(2, 1, figsize=(7, 8), sharex=True)
+        for ax, gas in zip(axes, ("CH4", "CO2")):
+            row = res[res["Gas"] == gas].iloc[0]
+            values = data[GAS_COLUMNS[gas]].iloc[idx1 : idx2 + 1].to_numpy()
+            fit = fit_window(data, idx1, idx2, gas, bubble_options)
+            used = fit["used"]
+            ax.plot(seconds[used], values[used], "o", color=GAS_COLORS[gas], ms=3, label="LGR data")
+            if (~used).any():
+                ax.plot(seconds[~used], values[~used], "o", color=BUBBLE_COLOR, ms=3,
+                        label="Excluded (bubble)")
+            segment = fit.get("segment", np.zeros(len(values), dtype=int))
+            for k, offset in fit["offsets"].items():
+                part = (segment == k) & used
+                ax.plot(seconds[part], offset + fit["slope"] * seconds[part], "k-",
+                        label="Fit" if k == min(fit["offsets"]) else None)
+            text = (
+                f"slope = {row['Slope (ppm/s)']:.2E} ppm s$^{{-1}}$, r = {row['Pearson']:.3f}\n"
+                f"Diffusive flux = {row['Diffusive flux (mmol/m2/d)']:.3g} mmol m$^{{-2}}$ d$^{{-1}}$"
+            )
+            if gas == "CH4" and row["N bubbles"] > 0:
+                text += (
+                    f"\nTotal flux = {row['Total flux (mmol/m2/d)']:.3g}, "
+                    f"ebullitive = {row['Ebullitive flux (mmol/m2/d)']:.3g}"
+                    f" ({int(row['N bubbles'])} bubbles)"
+                )
+            ax.set_title(text, fontsize=9, loc="left")
+            ax.set_ylabel(f"{gas} (ppm)")
+            ax.legend(fontsize=8, loc="lower right")
+        axes[-1].set_xlabel("Time (s)")
+        fig.suptitle(f"{name}  flux {fid}  {data.index[idx1]:%Y-%m-%d %H:%M:%S}")
+        fig.tight_layout()
+        figfile = "_".join([cfg["site"], name, "Flux", str(fid)]) + ".png"
+        fig.savefig(os.path.join(folder, figfile), format="png", dpi=300)
+        plt.close(fig)
 
 
-def plot_alldata(data, results, cfg):
-    """Figure of the whole LGR file with the selected points."""
-    var = cfg["variable"]
-    path_figout = _figure_folder(cfg)
-
-    fig = plt.figure(figsize=(10, 6))
-    ax = fig.add_subplot(111)
-    ax.plot(data.index, data[GAS_COLUMNS[var]], linewidth=3, label="data")
-    ax.plot(
-        results["Time start"], results["Value start (ppm)"], "ko", label="Selected points"
-    )
-    ax.plot(results["Time end"], results["Value end (ppm)"], "ko")
-    ax.set_xlabel("Time")
-    ax.set_ylabel(f"{var} (ppm)")
-    ax.legend()
-    figfilename = "_".join([cfg["site"], "points", var, cfg["file"] + ".png"])
-    fig.savefig(os.path.join(path_figout, figfilename), format="png", dpi=300)
+def plot_alldata(data, results, cfg, name, folder):
+    """Figure of the whole LGR file with the selected windows."""
+    fig, axes = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
+    windows = results.drop_duplicates("FID")
+    for ax, gas in zip(axes, ("CH4", "CO2")):
+        ax.plot(data.index, data[GAS_COLUMNS[gas]], color=GAS_COLORS[gas], linewidth=2)
+        for _, res in windows.iterrows():
+            ax.axvspan(res["Time start"], res["Time end"], color="g", alpha=0.2)
+            ax.text(res["Time start"], 0.98, str(res["FID"]), va="top",
+                    transform=ax.get_xaxis_transform(), color="g")
+        ax.set_ylabel(f"{gas} (ppm)")
+    axes[-1].set_xlabel("Time")
+    fig.suptitle(name)
+    figfile = "_".join([cfg["site"], name, "all"]) + ".png"
+    fig.savefig(os.path.join(folder, figfile), format="png", dpi=300)
     plt.close(fig)

@@ -44,16 +44,13 @@ def footer_pos(filename: str) -> int:
     return ifooter
 
 
-def read_lgr_data(cfg: dict) -> pd.DataFrame:
+def read_lgr_file(filename: str) -> pd.DataFrame:
     """Read LGR file.
 
     Parameters
     ----------
-    cfg: dict
-        Configuration dictionary with the following keys:
-        - "date" (str): Date string for the file path.
-        - "path_in" (str): Base directory for the input file.
-        - "file" (str): Name of the input file without extension.
+    filename: str
+        Path of the LGR file (.txt).
 
     Returns
     -------
@@ -61,19 +58,6 @@ def read_lgr_data(cfg: dict) -> pd.DataFrame:
         Data from the LGR file indexed by Time, columns [[CH4]d_ppm, [CO2]d_ppm]
         and the DIAGNOSTIC_COLUMNS present in the file.
     """
-    # Validate required keys in cfg
-    required_keys = ["date", "path_in", "file"]
-    for key in required_keys:
-        if key not in cfg:
-            raise KeyError(f"Missing required configuration key: {key}")
-
-    date = cfg["date"]
-    path = cfg["path_in"]
-    inputfile = cfg["file"]
-
-    filename = os.path.join(path, date, inputfile + ".txt")
-
-    # Ensure footer_pos function is defined or imported
     ifoot = footer_pos(filename)
 
     try:
