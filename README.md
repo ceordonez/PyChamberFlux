@@ -31,7 +31,7 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
    ```
 
    Windows users can also double-click `main.py` to get the dialog, if `.venv` is the Python that opens `.py` files (otherwise use `uv run main.py`).
-3. Check the flux windows on the plot of each file (CH<sub>4</sub> on the left axis, CO<sub>2</sub> on the right). The pre-selected windows are shaded and labelled with their number, the Pearson r of each gas and the CH<sub>4</sub> bubbles found (marked in orange). Points are paired in time order (1st–2nd, 3rd–4th, ...).
+3. Check the flux windows on the plot of each file (CH<sub>4</sub> on top, CO<sub>2</sub> below, on the same time axis; clicks work on both). The pre-selected windows are shaded and labelled with their number, the Pearson r of each gas and the CH<sub>4</sub> bubbles found (the excluded part of the CH<sub>4</sub> line is drawn in violet). Points are paired in time order (1st–2nd, 3rd–4th, ...).
    - **Left click**: add a point.
    - **Right click**: remove the nearest point. To move the edge of a window, right-click the edge and then left-click the new position.
    - **`d`** (or Delete) with the mouse over a window: delete that window.
@@ -61,7 +61,7 @@ A bubble reaching the chamber is an abrupt increase of CH<sub>4</sub>, after whi
 4. the jumps are removed and one line is fitted to the whole window: its slope gives the **diffusive** flux;
 5. the sum of the jumps divided by the duration of the window gives the **ebullitive** flux, and **total** = diffusive + ebullitive.
 
-Check the per-flux figures: the excluded samples are orange and the fitted line is drawn on each part between bubbles. Set `enabled: false` to fit CH<sub>4</sub> as a plain line.
+Check the per-flux figures: the excluded samples are open violet circles and the fitted line is drawn on each part between bubbles. Set `enabled: false` to fit CH<sub>4</sub> as a plain line.
 
 ## Results
 
