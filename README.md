@@ -4,11 +4,13 @@ Interactive tool to calculate floating chamber fluxes of CH<sub>4</sub> and CO<s
 
 ## Installation
 
+The project is managed with [uv](https://docs.astral.sh/uv/). From the repository folder:
+
 ```sh
-pip install -r requirements.txt
+uv sync
 ```
 
-Requires `pyghgaq>=0.1.5`.
+This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, including `pyghgaq>=0.1.5` (taken from its GitHub repository until 0.1.5 is on PyPI). `uv run` (below) also does this automatically.
 
 ## Usage
 
@@ -22,13 +24,13 @@ Requires `pyghgaq>=0.1.5`.
 2. Run:
 
    ```sh
-   python main.py                        # choose the LGR files in a dialog
-   python main.py gga_2025-01-21_f0001.txt
-   python main.py path/to/LGR/2025-01-21  # all .txt files in the folder, one after the other
-   python main.py -c other_site.yml FILE  # another configuration file
+   uv run main.py                        # choose the LGR files in a dialog
+   uv run main.py gga_2025-01-21_f0001.txt
+   uv run main.py path/to/LGR/2025-01-21  # all .txt files in the folder, one after the other
+   uv run main.py -c other_site.yml FILE  # another configuration file
    ```
 
-   Windows users can also double-click `main.py` to get the dialog.
+   Windows users can also double-click `main.py` to get the dialog, if `.venv` is the Python that opens `.py` files (otherwise use `uv run main.py`).
 3. Check the flux windows on the plot of each file (CH<sub>4</sub> on the left axis, CO<sub>2</sub> on the right). The pre-selected windows are shaded and labelled with their number, the Pearson r of each gas and the CH<sub>4</sub> bubbles found (marked in orange). Points are paired in time order (1st–2nd, 3rd–4th, ...).
    - **Left click**: add a point.
    - **Right click**: remove the nearest point. To move the edge of a window, right-click the edge and then left-click the new position.

@@ -3,10 +3,10 @@
 """Floating chamber CH4 and CO2 fluxes from LGR files.
 
 Usage:
-    python main.py                     choose the files in a dialog
-    python main.py FILE [FILE ...]     process these LGR files
-    python main.py FOLDER              process all .txt files in the folder
-    python main.py -c other.yml FILE   use another configuration file
+    uv run main.py                     choose the files in a dialog
+    uv run main.py FILE [FILE ...]     process these LGR files
+    uv run main.py FOLDER              process all .txt files in the folder
+    uv run main.py -c other.yml FILE   use another configuration file
 """
 
 import argparse
@@ -43,7 +43,7 @@ def ask_files(initialdir=None):
         import tkinter as tk
         from tkinter import filedialog
     except ImportError:
-        sys.exit("No file dialog available, give the LGR files as arguments: python main.py FILE")
+        sys.exit("No file dialog available, give the LGR files as arguments: uv run main.py FILE")
     root = tk.Tk()
     root.withdraw()
     names = filedialog.askopenfilenames(

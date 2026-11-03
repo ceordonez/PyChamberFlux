@@ -8,3 +8,4 @@ __pycache__/
 plots/
 results.csv
 results.xlsx
+.venv/

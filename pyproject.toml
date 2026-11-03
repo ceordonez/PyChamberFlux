@@ -1,0 +1,22 @@
+[project]
+name = "pychamberflux"
+version = "0.1.0"
+description = "Interactive floating chamber CH4 and CO2 fluxes (diffusive and ebullitive) from LGR analyser files"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "pyghgaq>=0.1.5",
+    "pyyaml",
+    "xlsxwriter",
+]
+
+[tool.uv]
+# Application run with `uv run main.py`, not an installable package
+package = false
+
+[tool.uv.sources]
+# pyghgaq 0.1.5 is not on PyPI yet; remove this once it is released there
+pyghgaq = { git = "https://github.com/ceordonez/PyGHGaq", branch = "main" }
