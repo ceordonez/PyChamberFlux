@@ -1,0 +1,26 @@
+[project]
+name = "lgr-surfflux"
+version = "0.1.0"
+description = "Interactive tool to estimate slopes from time series data"
+readme = "README.md"
+authors = [{name = "C.E. Ordoñez"}]
+license = {text = "MIT"}
+dependencies = [
+    "pandas",
+    "numpy",
+    "scipy",
+    "plotly",
+    "click",
+    "pyyaml",
+    "openpyxl",
+    "dash",
+    "dash_bootstrap_components",
+]
+
+[project.scripts]
+lgrflux = "lgr_surfflux.cli:cli"
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
