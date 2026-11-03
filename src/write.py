@@ -79,7 +79,7 @@ def write_results(data, results, cfg, name, source=None):
         Name of the LGR file, written in the File column (default: name)
     """
     source = source or name
-    folder = Path(cfg["path_out"]) / f"{cfg['site']}_{name}"
+    folder = results_folder(cfg, name)
     folder.mkdir(parents=True, exist_ok=True)
 
     table = results_table(results, source)
@@ -111,6 +111,34 @@ def write_results(data, results, cfg, name, source=None):
     ):
         update_campaign(Path(path), rows, source, keys)
         print(f"Added to {path}")
+
+
+def results_folder(cfg, name):
+    """Folder with the results of one LGR file."""
+    return Path(cfg["path_out"]) / f"{cfg['site']}_{name}"
+
+
+def saved_windows(cfg, name, data):
+    """Windows of a file processed before, from its results.csv.
+
+    Returns None if the file was not processed before or if the saved
+    windows do not match the data (e.g. another file with the same name).
+    """
+    path = results_folder(cfg, name) / "results.csv"
+    if not path.exists():
+        return None
+    try:
+        saved = pd.read_csv(path, parse_dates=["Time start"])
+        windows = [(int(a), int(b)) for a, b in zip(saved["ID start"], saved["ID end"])]
+    except (KeyError, ValueError, pd.errors.ParserError):
+        print(f"Could not read the windows saved in {path}, pre-selecting them again.")
+        return None
+    n = len(data)
+    for (a, b), start in zip(windows, saved["Time start"]):
+        if not (0 <= a < b < n) or abs((data.index[a] - start).total_seconds()) > 1:
+            print(f"The windows saved in {path} do not match this file, pre-selecting them again.")
+            return None
+    return windows
 
 
 def write_excel(path, table, bubbles, samples, settings):

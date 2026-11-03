@@ -22,6 +22,8 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
    - `Plot`: optional y limits of the CH<sub>4</sub> axis of the selection plot.
    - `Output`: `excel: true` to also save the results as an Excel file (CSV only by default).
    - `Preselect` and `Bubbles`: see below. Remove a line to use its default.
+
+   The configuration is checked before processing: missing or wrong values and misspelled settings are listed with what to fix.
 2. Run:
 
    ```sh
@@ -34,14 +36,18 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
    Windows users can also double-click `main.py` to get the dialog, if `.venv` is the Python that opens `.py` files (otherwise use `uv run main.py`).
 
    To try it, run `uv run main.py examples/example.txt`: about one hour of LGR data with three chamber deployments.
-3. Check the flux windows on the plot of each file (CH<sub>4</sub> on top, CO<sub>2</sub> below, on the same time axis; clicks work on both). The pre-selected windows are shaded and labelled with their number, the Pearson r of each gas and the CH<sub>4</sub> bubbles found (the excluded part of the CH<sub>4</sub> line is drawn in violet). Points are paired in time order (1st–2nd, 3rd–4th, ...).
+3. Check the flux windows on the plot of each file (CH<sub>4</sub> on top, CO<sub>2</sub> below, on the same time axis; clicks work on both). The pre-selected windows are shaded and labelled with their number, the diffusive flux (mmol m⁻² d⁻¹) and Pearson r of each gas and the CH<sub>4</sub> bubbles found (the excluded part of the CH<sub>4</sub> line is drawn in violet). A label is red when the flux would be flagged in the results (|r| < `min_r` or window shorter than `min_duration`). Points are paired in time order (1st–2nd, 3rd–4th, ...).
    - **Left click**: add a point.
    - **Right click**: remove the nearest point. To move the edge of a window, right-click the edge and then left-click the new position.
    - **`d`** (or Delete) with the mouse over a window: delete that window.
-   - **Middle click** or closing the window: finish and go to the next file.
+   - **Enter**, middle click or closing the window: save and go to the next file.
+   - **`s`**: skip this file (nothing saved).
+   - **`q`**: stop: this file is not saved and the remaining files are not processed.
    - Use the zoom and pan tools of the toolbar to look closer; clicks do not add points while one of them is active (click the tool again to switch it off).
 
    An unpaired last point and windows with fewer than 3 samples are ignored. Files that are not LGR files are skipped.
+
+   A file processed before opens with the windows saved in its `results.csv` instead of the pre-selection, so you only change what needs fixing.
 
 ### Pre-selection
 

@@ -13,7 +13,8 @@ from matplotlib.patches import Patch
 from matplotlib.widgets import MultiCursor
 from pandas.plotting import register_matplotlib_converters
 
-from src.fitting import GAS_COLUMNS, fit_window, window_seconds
+from src.fitting import GAS_COLUMNS, fit_window, quality_flag, to_flux, window_seconds
+from src.preselect import DEFAULTS as PRESELECT_DEFAULTS
 
 register_matplotlib_converters()
 # Interactive backend for the point selection, unless one is set explicitly
@@ -29,6 +30,7 @@ GAS_COLORS = {"CH4": "#2a78d6", "CO2": "#eb6834"}
 BUBBLE_COLOR = "#6250d6"
 WINDOW_COLOR = "#8a8984"
 POINT_COLOR = INK
+FLAG_COLOR = "#d03b3b"  # label of a window that would be flagged
 GAS_LABELS = {"CH4": "CH$_4$", "CO2": "CO$_2$"}
 MIN_POINTS = 3
 
@@ -55,6 +57,9 @@ mpl.rcParams.update({
     "legend.fontsize": 9,
     "savefig.bbox": "tight",
 })
+# Keys used by the selection window instead of matplotlib's save (s) and close (q)
+for _keymap, _key in (("keymap.save", "s"), ("keymap.quit", "q")):
+    mpl.rcParams[_keymap] = [k for k in mpl.rcParams[_keymap] if k != _key]
 
 
 def _time_axis(ax):
@@ -83,39 +88,83 @@ def figure_folder(data, cfg):
     return path_figout
 
 
-def _window_label(data, i, j, n, bubble_options):
-    """Number, r of each gas and number of CH4 bubbles of a window."""
+def _window_label(data, i, j, n, cfg):
+    """Label of a window: number, flux and r of each gas, CH4 bubbles, flag.
+
+    Returns
+    -------
+    label : str
+    bubbles : list of (int, int)
+        First and last sample of each CH4 bubble (positions in data)
+    flagged : bool
+        True if the flux would be flagged in the results (|r| < min_r or
+        window shorter than min_duration)
+    """
     if j - i + 1 < MIN_POINTS:
-        return f"{n}: too short", []
+        return f"{n}: too short", [], True
+    quality = {**PRESELECT_DEFAULTS, **(cfg.get("Preselect") or {})}
+    duration = (data.index[j] - data.index[i]).total_seconds()
     lines = [str(n)]
     bubbles = []
+    flags = []
     for gas in ("CH4", "CO2"):
         try:
-            fit = fit_window(data, i, j, gas, bubble_options)
+            fit = fit_window(data, i, j, gas, cfg.get("Bubbles"))
         except ValueError:
             lines.append(f"{GAS_LABELS[gas]} ?")
+            flags.append(f"{GAS_LABELS[gas]} fit failed")
             continue
-        text = f"{GAS_LABELS[gas]} r={fit['rvalue']:.2f}"
+        text = f"{GAS_LABELS[gas]} {to_flux(cfg, fit['slope']):.3g}  r {fit['rvalue']:.2f}"
         if fit["bubbles"]:
             bubbles = [(i + a, i + b) for a, b in fit["bubbles"]]
-            text += f" ({len(bubbles)} bubble{'s' if len(bubbles) > 1 else ''})"
+            text += f"  +{len(bubbles)} bubble{'s' if len(bubbles) > 1 else ''}"
         lines.append(text)
-    return "\n".join(lines), bubbles
+        flag = quality_flag(fit["rvalue"], duration, quality)
+        if flag:
+            flags += [f"{GAS_LABELS[gas]} {f}" if f.startswith("|r|")
+                      else f.replace("shorter than", "<") for f in flag.split("; ")]
+    if flags:
+        lines.append("check: " + ", ".join(dict.fromkeys(flags)))
+    return "\n".join(lines), bubbles, bool(flags)
+
+
+def _unstack_labels(fig, ax, labels, pad=5):
+    """Move labels down until they do not overlap the labels before them."""
+    renderer = fig.canvas.get_renderer()
+    to_axes = ax.transAxes.inverted()
+
+    def extent(label):  # text plus its box padding, in pixels
+        box = label.get_window_extent(renderer)
+        return box.from_extents(box.x0 - pad, box.y0 - pad, box.x1 + pad, box.y1 + pad)
+
+    placed = []
+    for label in labels:
+        for _ in range(len(placed)):
+            box = extent(label)
+            hit = next((other for other in placed if box.overlaps(other)), None)
+            if hit is None:
+                break
+            # top of this label just under the bottom of the one it overlaps
+            label.set_y(to_axes.transform((0, hit.y0 - pad))[1])
+        placed.append(extent(label))
 
 
 def plot_select_points(data, cfg, preselected=(), title=""):
     """Select the start and end of each flux on the plot.
 
-    CH4 is on the left axis and CO2 on the right axis. Points are paired in
+    CH4 is on top and CO2 below, on the same time axis. Points are paired in
     time order (1st-2nd, 3rd-4th, ...); each window is shaded and labelled
-    with its number, the Pearson r of each gas and the CH4 bubbles found
-    (marked in orange).
+    with its number, the diffusive flux (mmol m-2 d-1) and Pearson r of each
+    gas and the CH4 bubbles found (drawn in violet). Windows that would be
+    flagged in the results have a red label.
 
     Left click: add the nearest sample.
     Right click: remove the nearest point (to move an edge: right click it,
     then left click the new position).
     Key "d" or Delete: remove the window under the mouse.
-    Middle click or closing the window: finish.
+    Enter, middle click or closing the window: finish and save.
+    Key "s": skip this file (nothing saved). Key "q": stop (this file is not
+    saved and the remaining files are not processed).
     Clicks are ignored while the zoom or pan tool of the toolbar is active.
 
     Parameters
@@ -127,11 +176,12 @@ def plot_select_points(data, cfg, preselected=(), title=""):
 
     Returns
     -------
-    list of (int, int)
+    windows : list of (int, int)
         Positions of the first and last sample of each flux, in time order.
+    action : str
+        "save", "skip" or "quit"
     """
     plot_cfg = cfg.get("Plot") or {}
-    bubble_options = cfg.get("Bubbles")
 
     xnum = date2num(data.index)
     values = {gas: data[GAS_COLUMNS[gas]].to_numpy() for gas in ("CH4", "CO2")}
@@ -153,9 +203,9 @@ def plot_select_points(data, cfg, preselected=(), title=""):
     ax_ch4.set_title(title, loc="left", fontsize=12, fontweight="bold", pad=24)
     fig.text(
         0.5, 0.01,
-        "Left click: add point     Right click: remove nearest point     "
-        "d: delete window under mouse     Middle click or close: finish     "
-        "(clicks are ignored while zoom/pan is on)",
+        "Left click: add point   Right click: remove nearest point   d: delete window under mouse   "
+        "Enter: save and next file   s: skip file   q: stop   "
+        "(fluxes in mmol m$^{-2}$ d$^{-1}$; clicks are ignored while zoom/pan is on)",
         ha="center", va="bottom", fontsize=9, color=MUTED,
     )
     fig.legend(
@@ -171,6 +221,7 @@ def plot_select_points(data, cfg, preselected=(), title=""):
 
     selected = sorted({i for window in preselected for i in window})
     window_artists = []
+    action = ["save"]  # changed by the s and q keys
 
     def redraw():
         for gas, mark in marks.items():
@@ -178,8 +229,9 @@ def plot_select_points(data, cfg, preselected=(), title=""):
         for artist in window_artists:
             artist.remove()
         window_artists.clear()
+        labels = []
         for n, (i, j) in enumerate(zip(selected[::2], selected[1::2]), start=1):
-            label, bubbles = _window_label(data, i, j, n, bubble_options)
+            label, bubbles, flagged = _window_label(data, i, j, n, cfg)
             for ax in axes.values():
                 window_artists.append(
                     ax.axvspan(xnum[i], xnum[j], color=WINDOW_COLOR, alpha=0.15, lw=0)
@@ -190,14 +242,17 @@ def plot_select_points(data, cfg, preselected=(), title=""):
                     xnum[a : b + 1], values["CH4"][a : b + 1], color=BUBBLE_COLOR,
                     lw=3.5, solid_capstyle="round", zorder=4,
                 ))
-            window_artists.append(
-                ax_ch4.text(
-                    (xnum[i] + xnum[j]) / 2, 0.97, label,
-                    transform=ax_ch4.get_xaxis_transform(), ha="center", va="top",
-                    fontsize=8, color=INK_2, linespacing=1.3,
-                    bbox={"boxstyle": "round,pad=0.3", "fc": "white", "ec": GRID, "alpha": 0.9},
-                )
+            label_artist = ax_ch4.text(
+                (xnum[i] + xnum[j]) / 2, 0.97, label,
+                transform=ax_ch4.get_xaxis_transform(), ha="center", va="top",
+                fontsize=8, color=FLAG_COLOR if flagged else INK_2, linespacing=1.3,
+                bbox={"boxstyle": "round,pad=0.3", "fc": "white", "alpha": 0.9,
+                      "ec": FLAG_COLOR if flagged else GRID,
+                      "lw": 1.2 if flagged else 0.8},
             )
+            window_artists.append(label_artist)
+            labels.append(label_artist)
+        _unstack_labels(fig, ax_ch4, labels)
         fig.canvas.draw_idle()
 
     def toolbar_active():
@@ -228,6 +283,10 @@ def plot_select_points(data, cfg, preselected=(), title=""):
         redraw()
 
     def on_key(event):
+        if event.key in ("enter", "s", "q"):
+            action[0] = {"enter": "save", "s": "skip", "q": "quit"}[event.key]
+            plt.close(fig)
+            return
         if event.key not in ("d", "delete") or event.xdata is None:
             return
         for n in range(0, len(selected) - 1, 2):
@@ -245,7 +304,7 @@ def plot_select_points(data, cfg, preselected=(), title=""):
     redraw()
     plt.show()
 
-    return points_to_windows(selected)
+    return points_to_windows(selected), action[0]
 
 
 def points_to_windows(points):

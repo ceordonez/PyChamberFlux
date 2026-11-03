@@ -2,9 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import pandas as pd
-import pyghgaq as pyg
 
-from src.fitting import GAS_COLUMNS, fit_window
+from src.fitting import GAS_COLUMNS, fit_window, quality_flag, to_flux
 from src.plots import plot_select_points
 from src.preselect import DEFAULTS as PRESELECT_DEFAULTS
 from src.preselect import preselect_windows
@@ -40,7 +39,7 @@ RESULT_COLUMNS = [
 DIAGNOSTIC_RESULTS = dict(zip(DIAGNOSTIC_COLUMNS, RESULT_COLUMNS[-3:]))
 
 
-def processing_data(data, cfg, title=""):
+def processing_data(data, cfg, title="", windows=None):
     """Select the flux windows interactively and calculate the fluxes.
 
     Parameters
@@ -51,16 +50,24 @@ def processing_data(data, cfg, title=""):
         Configuration information
     title: str
         Shown on the selection plot (e.g. the file name)
+    windows: list of (int, int), optional
+        Windows shown at the start (e.g. saved when the file was processed
+        before). By default they are pre-selected automatically.
 
     Returns
     -------
-    DataFrame
+    results : DataFrame
         Two rows per flux (CH4 and CO2), see calculate_fluxes.
+    action : str
+        "save", "skip" (nothing to save) or "quit" (stop processing files)
     """
-    suggested = preselect_windows(data, cfg.get("Preselect"))
-    print(f"{len(suggested)} flux windows pre-selected, check them on the plot.")
-    windows = plot_select_points(data, cfg, suggested, title=title)
-    return calculate_fluxes(cfg, data, windows)
+    if windows is None:
+        windows = preselect_windows(data, cfg.get("Preselect"))
+        print(f"{len(windows)} flux windows pre-selected, check them on the plot.")
+    windows, action = plot_select_points(data, cfg, windows, title=title)
+    if action != "save":
+        return pd.DataFrame(columns=RESULT_COLUMNS), action
+    return calculate_fluxes(cfg, data, windows), action
 
 
 def calculate_fluxes(cfg, data, windows):
@@ -135,25 +142,6 @@ def calculate_fluxes(cfg, data, windows):
                 row["Total flux (mmol/m2/d)"] = diffusive + ebullitive
             rows.append(row)
     return pd.DataFrame(rows, columns=RESULT_COLUMNS)
-
-
-def to_flux(cfg, slope):
-    """Flux (mmol m-2 d-1) from a slope (ppm/s), with the chamber of the configuration."""
-    flux = pyg.chamber_flux(
-        slope, cfg["Chamber"]["Volume"], cfg["Chamber"]["Area"],
-        cfg["Air"]["Temp"], cfg["Air"]["Pres"],
-    )
-    return flux.to("mmol m^-2 d^-1").magnitude
-
-
-def quality_flag(rvalue, duration, options):
-    """Reasons to check a flux: |r| below min_r, window shorter than min_duration."""
-    reasons = []
-    if not abs(rvalue) >= options["min_r"]:
-        reasons.append(f"|r| < {options['min_r']}")
-    if duration < options["min_duration"]:
-        reasons.append(f"shorter than {options['min_duration']} s")
-    return "; ".join(reasons)
 
 
 BUBBLE_COLUMNS = [

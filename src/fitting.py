@@ -46,3 +46,22 @@ def fit_window(data, idx1, idx2, gas, bubble_options=None):
         "used": np.ones(len(window), dtype=bool),
         "offsets": {0: fit.intercept.to("ppm").magnitude},
     }
+
+
+def to_flux(cfg, slope):
+    """Flux (mmol m-2 d-1) from a slope (ppm/s), with the chamber of the configuration."""
+    flux = pyg.chamber_flux(
+        slope, cfg["Chamber"]["Volume"], cfg["Chamber"]["Area"],
+        cfg["Air"]["Temp"], cfg["Air"]["Pres"],
+    )
+    return flux.to("mmol m^-2 d^-1").magnitude
+
+
+def quality_flag(rvalue, duration, options):
+    """Reasons to check a flux: |r| below min_r, window shorter than min_duration."""
+    reasons = []
+    if not abs(rvalue) >= options["min_r"]:
+        reasons.append(f"|r| < {options['min_r']}")
+    if duration < options["min_duration"]:
+        reasons.append(f"shorter than {options['min_duration']} s")
+    return "; ".join(reasons)
