@@ -2,6 +2,27 @@
 
 Interactive tool to calculate floating chamber fluxes of CH<sub>4</sub> and CO<sub>2</sub> from LGR (Los Gatos Research) analyser files. Both gases are processed from one selection of the chamber deployments, and CH<sub>4</sub> bubbles (ebullition) are separated from the diffusive flux. The slope and flux calculations use [PyGHGaq](https://github.com/ceordonez/PyGHGaq) (`chamber_slope` and `chamber_flux`).
 
+## Quick start
+
+1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and get the code:
+
+   ```sh
+   git clone https://github.com/ceordonez/PyChamberFlux.git
+   cd PyChamberFlux
+   ```
+
+2. In `config.yml`, set at least `path_out` (where the results go), `site`, and the `Air` and `Chamber` values of your chamber.
+3. Try it with the example file (the first run installs the dependencies):
+
+   ```sh
+   uv run main.py examples/example.txt
+   ```
+
+4. On the plot, check the shaded flux windows (red labels need a look), adjust them with the mouse (left click: add a point, right click: remove, `d`: delete a window) and press **Enter** to save.
+5. The results are in `path_out`: `<site>_example/results.csv` with one row per flux, and `<site>_fluxes.csv` collecting all the files of the site.
+
+Then run it on your own data: `uv run main.py path/to/LGR/folder` processes every `.txt` file in the folder, one after the other (`s` skips a file, `q` stops). See [Usage](#usage) for details.
+
 ## Installation
 
 The project is managed with [uv](https://docs.astral.sh/uv/). From the repository folder:
