@@ -84,3 +84,30 @@ def test_summary(cfg, example_data):
     text = summary(results_table(results, "example.txt"))
     assert "CH4 diff" in text and "57.1" in text
     assert "|r| < 0.9" in text.splitlines()[-1]  # the flat window is flagged
+
+
+def test_extra_units(cfg, example_data):
+    from src.write import results_table
+
+    results = calculate_fluxes(cfg, example_data, EXAMPLE_WINDOWS)
+    table = results_table(results, "x", ["umol m-2 s-1", "mg m-2 d-1", "mg C m-2 d-1"])
+    mmol = table["CO2 flux (mmol/m2/d)"]
+    assert table["CO2 flux (umol/m2/s)"].tolist() == pytest.approx((mmol * 1000 / 86400).tolist())
+    assert table["CO2 flux (mg/m2/d)"].tolist() == pytest.approx((mmol * 44.009).tolist())
+    assert table["CH4 total flux (mg C/m2/d)"].tolist() == pytest.approx(
+        (table["CH4 total flux (mmol/m2/d)"] * 12.011).tolist()
+    )
+    assert "CO2 flux SE (umol/m2/s)" in table.columns
+    assert "CH4 MDF (umol/m2/s)" not in table.columns
+    # each converted column comes right after the original
+    columns = list(table.columns)
+    i = columns.index("CO2 flux (mmol/m2/d)")
+    assert columns[i + 1] == "CO2 flux (umol/m2/s)"
+
+
+def test_unknown_unit_is_a_config_error(cfg):
+    from src.config import ConfigError, validate_config
+
+    cfg["Output"] = {"units": ["kg/ha/yr"]}
+    with pytest.raises(ConfigError, match="Unknown unit 'kg/ha/yr'"):
+        validate_config(cfg, "test.yml")

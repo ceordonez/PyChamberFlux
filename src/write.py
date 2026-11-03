@@ -54,6 +54,14 @@ CHECK_FIELDS = ["GasT mean (degC)", "AmbT mean (degC)", "GasP mean (torr)", "ID 
 CSV_TIME = "%Y-%m-%d %H:%M:%S"
 CSV_SAMPLE_TIME = "%Y-%m-%d %H:%M:%S.%f"  # samples are about 1 s apart
 
+# Extra flux units (Output: units), from mmol m-2 d-1: (column unit, factor per gas)
+MOLAR_MASS = {"CH4": 16.043, "CO2": 44.009, "C": 12.011}  # g/mol
+EXTRA_UNITS = {
+    "umol m-2 s-1": ("(umol/m2/s)", lambda gas: 1000 / 86400),
+    "mg m-2 d-1": ("(mg/m2/d)", lambda gas: MOLAR_MASS[gas]),
+    "mg C m-2 d-1": ("(mg C/m2/d)", lambda gas: MOLAR_MASS["C"]),
+}
+
 # Excel number formats
 TIME_FORMAT = "yyyy-mm-dd hh:mm:ss"
 FLOAT_FORMAT = "0.000"
@@ -86,7 +94,7 @@ def write_results(data, results, cfg, name, source=None):
     folder = results_folder(cfg, name)
     folder.mkdir(parents=True, exist_ok=True)
 
-    table = results_table(results, source)
+    table = results_table(results, source, (cfg.get("Output") or {}).get("units") or ())
     bubbles = bubble_table(cfg, data, results)
     bubbles.insert(0, "File", source)
     samples = pd.concat(
@@ -200,8 +208,12 @@ def write_excel(path, table, bubbles, samples, settings):
             _format_sheet(writer, sheet, frame)
 
 
-def results_table(results, source):
-    """One row per flux: window, then the CH4 and CO2 columns, then checks."""
+def results_table(results, source, units=()):
+    """One row per flux: window, then the CH4 and CO2 columns, then checks.
+
+    units: extra flux units (keys of EXTRA_UNITS); each flux column (and its
+    standard error) gets a converted copy right after it.
+    """
     rows = []
     for fid, res in results.groupby("FID", sort=True):
         first = res.iloc[0]
@@ -218,7 +230,23 @@ def results_table(results, source):
     table = pd.DataFrame(rows)
     for column in ("CH4 N bubbles", "CH4 N points", "CO2 N points", "ID start", "ID end"):
         table[column] = table[column].astype(int)
-    return table
+    return add_units(table, units)
+
+
+def add_units(table, units):
+    """Copies of the flux columns in other units, right after each of them."""
+    if not units:
+        return table
+    columns = []
+    for column in table.columns:
+        columns.append((column, table[column]))
+        gas = column.split()[0]
+        if gas not in GAS_FIELDS or not column.endswith(FLUX_UNIT) or "MDF" in column:
+            continue
+        for unit in units:
+            label, factor = EXTRA_UNITS[unit]
+            columns.append((column.replace(FLUX_UNIT, label), table[column] * factor(gas)))
+    return pd.DataFrame(dict(columns))
 
 
 def flux_samples(data, res, cfg):

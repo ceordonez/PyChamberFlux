@@ -25,6 +25,9 @@ Plot:
 # Results are saved as CSV files; set excel: true to also get an Excel file
 Output:
   excel: false
+  # fluxes are in mmol m-2 d-1; add copies in other units, e.g.
+  # units: ['umol m-2 s-1', 'mg m-2 d-1', 'mg C m-2 d-1']
+  units: []
 
 # Optional field log (CSV): air temperature/pressure and notes (e.g. Location)
 # for each location or deployment, matched by time. See the README.

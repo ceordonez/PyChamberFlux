@@ -4,7 +4,7 @@
 import pandas as pd
 
 from src.fieldlog import conditions
-from src.fitting import GAS_COLUMNS, assess_fit, fit_window, to_flux
+from src.fitting import GAS_COLUMNS, QUALITY_DEFAULTS, assess_fit, fit_window, to_flux
 from src.plots import plot_select_points
 from src.preselect import preselect_windows
 from src.read_data import DIAGNOSTIC_COLUMNS
@@ -68,7 +68,8 @@ def processing_data(data, cfg, title="", windows=None):
         "save", "skip" (nothing to save) or "quit" (stop processing files)
     """
     if windows is None:
-        windows = preselect_windows(data, cfg.get("Preselect"))
+        quality = {**QUALITY_DEFAULTS, **(cfg.get("Quality") or {})}
+        windows = preselect_windows(data, cfg.get("Preselect"), quality["max_nonlinearity"])
         print(f"{len(windows)} flux windows pre-selected, check them on the plot.")
     windows, action = plot_select_points(data, cfg, windows, title=title)
     if action != "save":

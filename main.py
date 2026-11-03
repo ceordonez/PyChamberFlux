@@ -8,6 +8,8 @@ Usage:
     uv run main.py FOLDER              process all .txt files in the folder
     uv run main.py -c other.yml FILE   use another configuration file
     uv run main.py -n FOLDER           only the files not processed yet
+    uv run main.py --batch FOLDER      recalculate the files processed before, with
+                                       their saved windows, without the plot window
 """
 
 import argparse
@@ -16,7 +18,7 @@ from pathlib import Path
 
 from src.config import ConfigError, validate_config
 from src.plots import plot_data
-from src.processing_data import processing_data
+from src.processing_data import calculate_fluxes, processing_data
 from src.read_data import read_config, read_lgr_file
 from src.write import processed_files, results_folder, saved_windows, write_results
 
@@ -63,10 +65,13 @@ def ask_files(initialdir=None):
     return [Path(name) for name in names]
 
 
-def process_file(path, cfg, progress=""):
+def process_file(path, cfg, progress="", batch=False):
     """Select the fluxes of one LGR file and save figures and results.
 
     progress (e.g. "3 of 12") is shown in the title of the selection plot.
+    With batch=True, the windows saved when the file was processed before
+    are used without showing the plot (files not processed before are
+    skipped).
 
     Returns "save", "skip" or "quit" (stop processing the remaining files).
     """
@@ -82,6 +87,12 @@ def process_file(path, cfg, progress=""):
 
     name = path.stem
     windows = saved_windows(cfg, name, data)
+    if batch:
+        if windows is None:
+            print("Skipped: not processed before (no saved windows to recalculate).")
+            return "skip"
+        save_results(data, calculate_fluxes(cfg, data, windows), cfg, name, path)
+        return "save"
     if windows is not None:
         print(f"Processed before: showing the {len(windows)} windows saved in "
               f"{results_folder(cfg, name)}.")
@@ -97,9 +108,14 @@ def process_file(path, cfg, progress=""):
         print("No fluxes selected, nothing saved.")
         return action
 
+    save_results(data, results, cfg, name, path)
+    return action
+
+
+def save_results(data, results, cfg, name, path):
+    """Figures and result files of one LGR file."""
     plot_data(data, results, cfg, name)
     write_results(data, results, cfg, name, source=path.name)
-    return action
 
 
 def main(argv=None):
@@ -118,6 +134,11 @@ def main(argv=None):
     parser.add_argument(
         "-n", "--new-only", action="store_true",
         help="skip the files already in <path_out>/<site>_fluxes.csv",
+    )
+    parser.add_argument(
+        "--batch", action="store_true",
+        help="recalculate the files processed before with their saved windows, without "
+             "the plot window (e.g. after changing the configuration)",
     )
     args = parser.parse_args(argv)
 
@@ -138,8 +159,12 @@ def main(argv=None):
         print("No files to process.")
         return
 
+    if args.batch:
+        import matplotlib.pyplot as plt
+
+        plt.switch_backend("Agg")  # figures are only saved, no window needed
     for n, path in enumerate(files, start=1):
-        if process_file(path, cfg, f"{n} of {len(files)}") == "quit":
+        if process_file(path, cfg, f"{n} of {len(files)}", args.batch) == "quit":
             remaining = len(files) - n
             if remaining:
                 print(f"{remaining} file{'s' if remaining > 1 else ''} not processed.")

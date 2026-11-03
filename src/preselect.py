@@ -31,7 +31,7 @@ START_STEP = 10  # s, step when searching the start of the linear part
 R2_TOLERANCE = 0.005  # earliest start within this of the best r^2
 
 
-def preselect_windows(data, options=None):
+def preselect_windows(data, options=None, max_nonlinearity=None):
     """Suggest flux windows in an LGR record.
 
     Parameters
@@ -40,6 +40,11 @@ def preselect_windows(data, options=None):
         LGR data with a DatetimeIndex
     options : dict, optional
         Overrides for DEFAULTS
+    max_nonlinearity : float, optional
+        If given, the start of each window is moved later until a quadratic
+        fit gives an initial slope within this fraction of the linear slope
+        (for both gases; CH4 only without bubbles), i.e. until the chamber
+        has settled. Without such a start, the start with the best fit is kept.
 
     Returns
     -------
@@ -52,10 +57,15 @@ def preselect_windows(data, options=None):
 
     seconds = (data.index - data.index[0]).total_seconds().to_numpy()
     values = data[GAS_COLUMNS[opt["gas"]]].to_numpy(dtype=float)
+    gases = {gas: data[column].to_numpy(dtype=float) for gas, column in GAS_COLUMNS.items()
+             if column in data.columns}
 
     windows = []
     for start, end in _segments(seconds, values, opt):
-        window = _linear_part(seconds, values, start, end, opt)
+        linear = None
+        if max_nonlinearity is not None:
+            linear = _linearity_check(seconds, gases, start, end, max_nonlinearity)
+        window = _linear_part(seconds, values, start, end, opt, linear)
         if window is not None:
             windows.append(window)
     return windows
@@ -94,8 +104,43 @@ def _r2(x, y):
     return np.sum(dx * dy) ** 2 / (sxx * syy)
 
 
-def _linear_part(seconds, values, start, end, opt):
-    """Earliest start that gives (nearly) the best fit, or None if rejected."""
+def _nonlinearity(x, y):
+    """Quadratic initial slope / linear slope - 1 (x from the start of the window)."""
+    x = x - x[0]
+    slope = np.polyfit(x, y, 1)[0]
+    if x.size < 4 or slope == 0:
+        return np.nan
+    return np.polyfit(x, y, 2)[1] / slope - 1
+
+
+def _linearity_check(seconds, gases, start, end, limit):
+    """Function telling if the window i..end is linear enough for all gases.
+
+    CH4 is not checked when the segment has bubbles (abrupt increases).
+    """
+    checked = dict(gases)
+    if "CH4" in checked:
+        from src.bubbles import detect_bubbles
+
+        ch4 = checked["CH4"][start : end + 1]
+        if detect_bubbles(seconds[start : end + 1] - seconds[start], ch4):
+            del checked["CH4"]
+
+    def linear(i):
+        return all(
+            abs(_nonlinearity(seconds[i : end + 1], values[i : end + 1])) <= limit
+            for values in checked.values()
+        )
+
+    return linear
+
+
+def _linear_part(seconds, values, start, end, opt, linear=None):
+    """Earliest start that gives (nearly) the best fit, or None if rejected.
+
+    With `linear` (see _linearity_check), the earliest such start that is
+    also linear enough, if there is one.
+    """
     t_end = seconds[end]
     if t_end - seconds[start] < opt["min_duration"]:
         return None
@@ -109,5 +154,9 @@ def _linear_part(seconds, values, start, end, opt):
     r2_max = max(r2 for _, r2 in best)
     if r2_max < opt["min_r"] ** 2:
         return None
-    first = next(i for i, r2 in best if r2 >= r2_max - R2_TOLERANCE)
-    return first, end
+    good = [i for i, r2 in best if r2 >= r2_max - R2_TOLERANCE]
+    if linear is not None:
+        settled = [i for i, r2 in best if r2 >= opt["min_r"] ** 2 and linear(i)]
+        if settled:
+            return settled[0], end
+    return good[0], end

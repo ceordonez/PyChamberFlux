@@ -162,3 +162,51 @@ def test_main_reports_config_errors(monkeypatch, cfg):
     with pytest.raises(SystemExit) as error:
         main.main(["whatever.txt"])
     assert "Chamber: Area" in str(error.value)
+
+
+def test_window_fits_are_cached(monkeypatch, cfg, example_data):
+    import src.plots
+
+    calls = []
+    original = src.plots._window_label
+
+    def counting(data, i, j, n, cfg):
+        calls.append((i, j))
+        return original(data, i, j, n, cfg)
+
+    monkeypatch.setattr(src.plots, "_window_label", counting)
+    windows, _ = select(
+        monkeypatch, cfg, example_data, EXAMPLE_WINDOWS,
+        lambda s: s.click(3000), lambda s: s.click(3400),  # new window: fitted once
+        lambda s: s.key("d", 3200),  # delete it: nothing refitted
+    )
+    assert windows == EXAMPLE_WINDOWS
+    assert sorted(calls) == sorted(EXAMPLE_WINDOWS + [(3000, 3400)])
+
+
+def test_batch_recalculates_saved_windows(monkeypatch, cfg, tmp_path, capsys):
+    import shutil
+
+    from conftest import EXAMPLE
+
+    lgr = tmp_path / "lgr"
+    lgr.mkdir()
+    shutil.copy(EXAMPLE, lgr / "a.txt")
+    shutil.copy(EXAMPLE, lgr / "b.txt")
+    monkeypatch.setattr(main, "read_config", lambda path: cfg)
+    monkeypatch.setattr(plt, "show", lambda *a, **k: _press("enter"))
+    main.main([str(lgr / "a.txt")])  # a.txt processed interactively
+    campaign = tmp_path / "out" / "Test_fluxes.csv"
+    before = campaign.read_text()
+
+    def no_window(*args, **kwargs):
+        raise AssertionError("--batch must not open the selection window")
+
+    monkeypatch.setattr(plt, "show", no_window)
+    cfg["Output"] = {"units": ["umol m-2 s-1"]}  # a configuration change
+    main.main(["--batch", str(lgr)])
+    out = capsys.readouterr().out
+    assert "Skipped: not processed before" in out  # b.txt
+    after = campaign.read_text()
+    assert after != before and "(umol/m2/s)" in after.splitlines()[0]
+    assert "b.txt" not in after

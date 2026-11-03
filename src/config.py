@@ -21,7 +21,7 @@ OPTIONAL_SECTIONS = {
     "Preselect": PRESELECT_DEFAULTS,
     "Bubbles": BUBBLE_DEFAULTS,
     "Plot": {"ylim_min": None, "ylim_max": None},
-    "Output": {"excel": False},
+    "Output": {"excel": False, "units": []},
     "FieldLog": {"file": None, "time_offset": 0},
     "Quality": QUALITY_DEFAULTS,
 }
@@ -102,6 +102,13 @@ def validate_config(cfg, filename="config.yml"):
                 problems.append(
                     f"'{section}: {key}' must be {_kind(defaults[key])}, found {value!r}."
                 )
+    from src.write import EXTRA_UNITS
+
+    units = (cfg.get("Output") or {}).get("units") or []
+    for unit in units if isinstance(units, list) else []:
+        if unit not in EXTRA_UNITS:
+            problems.append(f"Unknown unit '{unit}' in 'Output: units'. Valid: "
+                            f"{', '.join(EXTRA_UNITS)}.")
     for key, value in (cfg.get("Quality") or {}).items():
         if key.endswith("_precision") and value is not None and (
             not _is_number(value) or value <= 0

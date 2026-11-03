@@ -41,6 +41,7 @@ FLAG_COLOR = "#d03b3b"  # label of a window that would be flagged
 GAS_LABELS = {"CH4": "CH$_4$", "CO2": "CO$_2$"}
 MIN_POINTS = 3
 GRAB_PIXELS = 8  # a left click this close (in x) to a point drags it
+NUMBER = "\x00"  # placeholder for the window number in cached labels
 
 mpl.rcParams.update({
     "figure.facecolor": "white",
@@ -236,6 +237,14 @@ def plot_select_points(data, cfg, preselected=(), title=""):
 
     selected = sorted({i for window in preselected for i in window})
     window_artists = []
+    label_cache = {}  # (first, last) -> label without number, bubbles, flagged
+
+    def window_label(n, i, j):
+        """Label of a window; the fits of a window are only done once."""
+        if (i, j) not in label_cache:
+            label_cache[(i, j)] = _window_label(data, i, j, NUMBER, cfg)
+        label, bubbles, flagged = label_cache[(i, j)]
+        return label.replace(NUMBER, str(n), 1), bubbles, flagged
     action = ["save"]  # changed by the s and q keys
     history = []  # previous states of `selected`, for undo
     drag = {"point": None, "moved": False}  # point being dragged
@@ -254,7 +263,7 @@ def plot_select_points(data, cfg, preselected=(), title=""):
         window_artists.clear()
         labels = []
         for n, (i, j) in enumerate(zip(selected[::2], selected[1::2]), start=1):
-            label, bubbles, flagged = _window_label(data, i, j, n, cfg)
+            label, bubbles, flagged = window_label(n, i, j)
             for ax in axes.values():
                 window_artists.append(
                     ax.axvspan(xnum[i], xnum[j], color=WINDOW_COLOR, alpha=0.15, lw=0)

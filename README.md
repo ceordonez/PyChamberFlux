@@ -43,7 +43,7 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
    - `Air`: air temperature (°C) and pressure (hPa) in the chamber, used for all fluxes unless a field log gives them.
    - `Chamber`: volume (L, including tubing and analyser) and area (m²).
    - `Plot`: optional y limits of the CH<sub>4</sub> axis of the selection plot.
-   - `Output`: `excel: true` to also save the results as an Excel file (CSV only by default).
+   - `Output`: `excel: true` to also save the results as an Excel file (CSV only by default); `units` to add the fluxes in `umol m-2 s-1`, `mg m-2 d-1` or `mg C m-2 d-1` next to mmol m⁻² d⁻¹.
    - `FieldLog`: optional CSV with the air temperature/pressure and notes (e.g. location) of each location or deployment, see [Field log](#field-log).
    - `Quality`: limits of the quality checks, see [Quality checks](#quality-checks).
    - `Preselect` and `Bubbles`: see below. Remove a line to use its default.
@@ -57,6 +57,7 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
    uv run main.py path/to/LGR/2025-01-21  # all .txt files in the folder, one after the other
    uv run main.py -c other_site.yml FILE  # another configuration file
    uv run main.py -n path/to/LGR          # only the files not in <site>_fluxes.csv yet
+   uv run main.py --batch path/to/LGR     # recalculate processed files with their saved windows
    ```
 
    Windows users can also double-click `main.py` to get the dialog, if `.venv` is the Python that opens `.py` files (otherwise use `uv run main.py`).
@@ -77,6 +78,8 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
    A file processed before opens with the windows saved in its `results.csv` instead of the pre-selection, so you only change what needs fixing.
 
    After saving, a summary of the fluxes of the file (and the ones to check) is printed in the terminal.
+
+   After changing the configuration (e.g. chamber volume, field log, quality limits or units) or updating PyChamberFlux, `--batch` recalculates all the files processed before with their saved windows, without opening the plot: the result files, figures and campaign files are updated. Files not processed before are skipped.
 
 ### Field log
 
@@ -114,7 +117,7 @@ When the chamber is placed or lifted, the concentration changes abruptly. Each d
 
 1. finds the breaks: rate of change larger than `jump_threshold` times the noise of the record;
 2. skips `dead_time` seconds after each break (chamber settling) and `end_margin` seconds before the next one;
-3. moves the start forward, in 10 s steps, to where the fit is (nearly) the best;
+3. moves the start forward, in 10 s steps, to the earliest start where the fit is good and the concentration change is linear for both gases (quadratic and linear initial slopes within `Quality: max_nonlinearity`; CH<sub>4</sub> only without bubbles), i.e. once the chamber has settled; if there is none, to where the fit is (nearly) the best;
 4. keeps the windows longer than `min_duration` with |r| ≥ `min_r`.
 
 It only suggests windows: always check them. It can miss deployments with a flux close to zero (low r) and suggest windows when the chamber is not deployed. Set `enabled: false` to select everything by hand.
@@ -179,6 +182,10 @@ uv run ruff check   # lint
 ```
 
 The tests check the fluxes of the example file against reference values, the bubble separation on synthetic data, the configuration and field log checks, the result files, and the selection window (with simulated clicks and keys). They run on GitHub for every push.
+
+## Citation
+
+If you use PyChamberFlux, please cite the version you used (see [CITATION.cff](CITATION.cff), or "Cite this repository" on GitHub). Changes between versions are in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

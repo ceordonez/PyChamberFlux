@@ -200,3 +200,14 @@ def test_quadratic_ignores_bubble_jumps(cfg):
     assert len(fit["bubbles"]) == 1
     result = assess_fit(cfg, data, 0, 599, "CH4", fit)
     assert abs(result["nonlinearity"]) < 0.1  # a straight line with a step
+
+
+def test_preselection_waits_until_the_chamber_has_settled(example_data):
+    from src.preselect import preselect_windows
+
+    plain = preselect_windows(example_data)
+    settled = preselect_windows(example_data, None, max_nonlinearity=0.2)
+    assert plain == EXAMPLE_WINDOWS
+    # window 2 starts later (settling excluded); 1 and 3 have no better start
+    assert settled[0] == plain[0] and settled[2] == plain[2]
+    assert settled[1][0] > plain[1][0] and settled[1][1] == plain[1][1]
