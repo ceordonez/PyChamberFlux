@@ -9,6 +9,9 @@ configuration file, keeping its comments and the other settings.
 
 import copy
 import re
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 from src.config import ConfigError, validate_config
@@ -131,6 +134,48 @@ def update_yaml(path, values):
     path.write_text("\n".join(lines) + "\n")
 
 
+def existing_parent(text):
+    """The folder itself or its nearest existing parent (start of the dialogs)."""
+    path = Path(text).expanduser() if text.strip() else Path.home()
+    while not path.is_dir() and path != path.parent:
+        path = path.parent
+    return path if path.is_dir() else Path.home()
+
+
+def zenity_command(folder, current):
+    """zenity command for the system file dialog: a folder or a CSV file."""
+    if folder:
+        command = ["zenity", "--file-selection", "--directory",
+                   "--title=Choose the output folder"]
+        start = existing_parent(current)
+    else:
+        command = ["zenity", "--file-selection", "--title=Choose the field log",
+                   "--file-filter=CSV files | *.csv", "--file-filter=All files | *"]
+        path = Path(current).expanduser()
+        start = path if current.strip() and path.is_file() else existing_parent(current)
+    # a trailing separator opens the dialog inside the folder
+    return [*command, f"--filename={start}{'/' if start.is_dir() else ''}"]
+
+
+def system_dialog(folder, current):
+    """Choose with the system file dialog (zenity) on Linux.
+
+    The Tk dialogs on Linux cannot create folders; zenity (GNOME/GTK) can.
+    Returns the chosen path, "" if cancelled, or None when zenity is not
+    available (then the Tk dialog is used; on Windows and macOS Tk already
+    uses the system dialog).
+    """
+    if not sys.platform.startswith("linux") or shutil.which("zenity") is None:
+        return None
+    try:
+        done = subprocess.run(zenity_command(folder, current), capture_output=True, text=True)
+    except OSError:
+        return None
+    if done.returncode == 0:
+        return done.stdout.strip()
+    return "" if done.returncode == 1 else None  # 1: cancelled; other: zenity failed
+
+
 def summary(cfg):
     """The values of FIELDS as text, for the terminal."""
     values = current_values(cfg)
@@ -179,11 +224,12 @@ def confirm_settings(cfg, filename):
                                                               padx=(8, 0))
         if kind == "path":
             def browse(var=var, key=key):
-                if key == "file":
+                chosen = system_dialog(key != "file", var.get())
+                if chosen is None and key == "file":
                     chosen = filedialog.askopenfilename(
                         filetypes=[("CSV files", "*.csv"), ("All files", "*")])
-                else:
-                    chosen = filedialog.askdirectory()
+                elif chosen is None:
+                    chosen = filedialog.askdirectory(initialdir=existing_parent(var.get()))
                 if chosen:
                     var.set(chosen)
 

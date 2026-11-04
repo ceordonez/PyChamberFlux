@@ -7,6 +7,12 @@ All notable changes to PyChamberFlux. Versions follow [semantic versioning](http
 ### Added
 
 - Window to check (and edit) the settings that change between campaigns before processing; changes apply to the run and are saved to the configuration file only on request, keeping its comments. `--no-confirm` skips it.
+- On Linux, *Browse…* in the settings window uses the system file dialog (zenity, if installed), which can create folders; it opens at the folder already entered.
+- Template field log for the example file: `examples/fieldlog.csv`.
+
+### Changed
+
+- Field log: empty rows and unnamed empty columns (e.g. trailing commas from a spreadsheet) are ignored instead of being copied to the results.
 
 ## [0.2.0] - 2026-11-03
 

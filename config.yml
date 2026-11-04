@@ -30,7 +30,8 @@ Output:
   units: []
 
 # Optional field log (CSV): air temperature/pressure and notes (e.g. Location)
-# for each location or deployment, matched by time. See the README.
+# for each location or deployment, matched by time. See the README;
+# template: examples/fieldlog.csv
 FieldLog:
   file:
   time_offset: 0     # s; field-log time + time_offset = LGR time

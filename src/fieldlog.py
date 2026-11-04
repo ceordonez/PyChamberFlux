@@ -15,6 +15,10 @@ The field log is a CSV file with one row per location (or per deployment):
 - Temp (degC) and Pres (hPa) (optional): air temperature and pressure in the
   chamber. Empty values (or no column) use Air: Temp / Pres of config.yml.
 - Any other column (Location, Chamber, Notes, ...) is copied to the results.
+- Empty rows and columns without a name and without values (e.g. trailing
+  commas left by a spreadsheet) are ignored.
+
+A template is in examples/fieldlog.csv.
 
 If the clock of the LGR analyser and the field log differ, set
 FieldLog: time_offset (seconds) so that field-log time + time_offset =
@@ -52,6 +56,10 @@ def load_field_log(path):
     except (pd.errors.ParserError, UnicodeDecodeError) as e:
         raise FieldLogError(f"Cannot read the field log {path}: {e}") from e
     log.columns = [str(c).strip() for c in log.columns]
+    # spreadsheets leave empty rows and unnamed empty columns (trailing commas)
+    unnamed = [c for c in log.columns if c == "" or c.startswith("Unnamed:")]
+    log = log.drop(columns=[c for c in unnamed if log[c].isna().all()])
+    log = log.dropna(how="all").reset_index(drop=True)
     if "Start" not in log.columns:
         raise FieldLogError(f"The field log {path} needs a 'Start' column.")
     if "End" not in log.columns:

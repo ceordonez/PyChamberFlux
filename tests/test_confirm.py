@@ -13,9 +13,12 @@ from src.confirm import (
     changed_values,
     confirm_settings,
     current_values,
+    existing_parent,
     parse_values,
     summary,
+    system_dialog,
     update_yaml,
+    zenity_command,
 )
 
 
@@ -119,3 +122,43 @@ def test_without_display_values_are_printed(cfg, monkeypatch, capsys):
     monkeypatch.setattr(tkinter, "Tk", no_display)
     assert confirm_settings(cfg, "config.yml") is cfg
     assert "Chamber volume" in capsys.readouterr().out
+
+
+def test_existing_parent(tmp_path):
+    assert existing_parent(str(tmp_path / "not" / "yet")) == tmp_path
+    assert existing_parent(str(tmp_path)) == tmp_path
+
+
+def test_zenity_command_starts_in_the_current_folder(tmp_path):
+    command = zenity_command(True, str(tmp_path / "new" / "folder"))
+    assert "--directory" in command and command[-1] == f"--filename={tmp_path}/"
+    log = tmp_path / "log.csv"
+    log.write_text("Start\n")
+    command = zenity_command(False, str(log))
+    assert "--directory" not in command and command[-1] == f"--filename={log}"
+
+
+@pytest.mark.parametrize(
+    "returncode, stdout, expected",
+    [(0, "/data/out\n", "/data/out"), (1, "", ""), (255, "", None)],
+)
+def test_system_dialog_result(monkeypatch, returncode, stdout, expected):
+    import subprocess
+
+    import src.confirm as confirm
+
+    monkeypatch.setattr(confirm.sys, "platform", "linux")
+    monkeypatch.setattr(confirm.shutil, "which", lambda name: "/usr/bin/zenity")
+    monkeypatch.setattr(confirm.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a, returncode, stdout=stdout, stderr=""))
+    assert system_dialog(True, "") == expected
+
+
+def test_without_zenity_the_tk_dialog_is_used(monkeypatch):
+    import src.confirm as confirm
+
+    monkeypatch.setattr(confirm.sys, "platform", "linux")
+    monkeypatch.setattr(confirm.shutil, "which", lambda name: None)
+    assert system_dialog(True, "") is None
+    monkeypatch.setattr(confirm.sys, "platform", "win32")
+    assert system_dialog(True, "") is None

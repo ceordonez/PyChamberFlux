@@ -61,7 +61,7 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
    uv run main.py --no-confirm FILE       # without the settings window
    ```
 
-   A window first shows the settings that change between campaigns (site, output folder, chamber volume and area, air temperature and pressure, field log, analyser precision), so that you check them before processing. Edit a value to use it for this run; tick *Save changes* to also write it to the configuration file (its comments and other settings are kept). Enter starts, Escape cancels. Without a display (e.g. on a server) the values are printed instead; `--no-confirm` skips the window.
+   A window first shows the settings that change between campaigns (site, output folder, chamber volume and area, air temperature and pressure, field log, analyser precision), so that you check them before processing. Edit a value to use it for this run (on Linux, *Browse…* opens the system file dialog through `zenity` when it is installed, so you can also create a new folder there); tick *Save changes* to also write it to the configuration file (its comments and other settings are kept). Enter starts, Escape cancels. Without a display (e.g. on a server) the values are printed instead; `--no-confirm` skips the window.
 
    Windows users can also double-click `main.py` to get the dialog, if `.venv` is the Python that opens `.py` files (otherwise use `uv run main.py`).
 
@@ -98,6 +98,9 @@ Start,End,Temp,Pres,Location,Notes
 - `End` (optional): when it stops applying. Without `End`, a row applies until the `Start` of the next row, and at most until the end of its day (so a file from another day never takes the last row of the day before).
 - `Temp` (°C) and `Pres` (hPa) (optional): empty values (or no column) use `Air` of the configuration.
 - Any other column (`Location`, `Chamber`, `Notes`, ...) is copied to the results, after `Flux`.
+- Empty rows, and columns without a name and without values (e.g. trailing commas left by Excel), are ignored.
+
+A template for the example file is in [`examples/fieldlog.csv`](examples/fieldlog.csv): copy it, keep the column names (`Start`, `End`, `Temp`, `Pres`) and replace the rows and the extra columns with your own.
 
 If the clock of the analyser differs from the field log (e.g. UTC vs local time), set `FieldLog: time_offset` (s) so that field-log time + `time_offset` = LGR time; a warning is printed when no flux of a file matches a row.
 

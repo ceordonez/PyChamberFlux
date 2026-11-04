@@ -127,6 +127,39 @@ def test_field_log_errors(tmp_path, content, message):
         load_field_log(path)
 
 
+def test_empty_columns_and_rows_are_ignored(tmp_path):
+    # trailing commas and an empty line, as left by a spreadsheet
+    path = tmp_path / "log.csv"
+    path.write_text(
+        "Start,End,Temp,Pres,Location,,,\n"
+        "2025-01-11 17:30,,20,1000,Site A,,,\n"
+        ",,,,,,,\n"
+        "2025-01-11 17:50,,25,,,,,\n"
+    )
+    log = load_field_log(path)
+    assert list(log.columns) == ["Start", "End", "Temp", "Pres", "Location"]
+    assert len(log) == 2
+
+
+def test_unnamed_column_with_values_is_kept(tmp_path):
+    path = tmp_path / "log.csv"
+    path.write_text("Start,Temp,\n2025-01-11 17:30,20,boat 2\n")
+    assert "boat 2" in load_field_log(path).iloc[0].tolist()
+
+
+def test_template_field_log_matches_the_example(cfg, example_data):
+    from conftest import EXAMPLE_WINDOWS, ROOT
+
+    from src.processing_data import calculate_fluxes
+    from src.write import results_table
+
+    cfg["FieldLog"] = {"file": str(ROOT / "examples" / "fieldlog.csv")}
+    cfg = validate_config(cfg, str(ROOT / "config.yml"))
+    table = results_table(calculate_fluxes(cfg, example_data, EXAMPLE_WINDOWS), "example.txt")
+    assert table["Location"].tolist() == ["Site A", "Site A", "Site B"]
+    assert table["Air temp (degC)"].tolist() == [32, 32, 31.5]
+
+
 def test_field_log_time_offset(logged_cfg):
     # the LGR clock is one hour ahead of the field log
     logged_cfg["FieldLog"]["time_offset"] = 3600
