@@ -82,7 +82,7 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
 
    After saving, a summary of the fluxes of the file (and the ones to check) is printed in the terminal.
 
-   After changing the configuration (e.g. chamber volume, field log, quality limits or units) or updating PyChamberFlux, `--batch` recalculates all the files processed before with their saved windows, without opening the plot: the result files, figures and campaign files are updated. Files not processed before are skipped.
+   After changing the configuration (e.g. chamber volume, field log, quality limits or units) or updating PyChamberFlux, `--batch` recalculates all the files processed before with their saved windows, without opening the plot: the result files, figures and campaign files are updated. Files not processed before are skipped; the message says in which folder the saved windows were looked for (the output folder and site must be the same as when the windows were saved).
 
 ### Field log
 
@@ -96,7 +96,7 @@ Start,End,Temp,Pres,Location,Notes
 
 - `Start` (required): when the row starts to apply, as `YYYY-MM-DD HH:MM[:SS]`, in the clock of the LGR analyser.
 - `End` (optional): when it stops applying. Without `End`, a row applies until the `Start` of the next row, and at most until the end of its day (so a file from another day never takes the last row of the day before).
-- `Temp` (°C) and `Pres` (hPa) (optional): empty values (or no column) use `Air` of the configuration.
+- `Temp` (°C) and `Pres` (hPa) (optional): empty values (or no column) use `Air` of the configuration. A warning is printed when a column is missing (e.g. `Press` instead of `Pres`).
 - Any other column (`Location`, `Chamber`, `Notes`, ...) is copied to the results, after `Flux`.
 - Empty rows, and columns without a name and without values (e.g. trailing commas left by Excel), are ignored.
 

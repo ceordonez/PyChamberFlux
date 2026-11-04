@@ -94,6 +94,27 @@ def extra_columns(log):
     return [c for c in log.columns if c not in TIME_COLUMNS and c not in CONDITION_COLUMNS]
 
 
+def missing_conditions(log, cfg):
+    """Warnings for Temp / Pres columns missing in the field log.
+
+    A misspelt column (e.g. 'Press') would otherwise only be copied to the
+    results while the values of the configuration are used.
+    """
+    names = {"Temp": ("temperature", "degC"), "Pres": ("pressure", "hPa")}
+    warnings = []
+    for column, key in CONDITION_COLUMNS.items():
+        if column in log.columns:
+            continue
+        similar = [c for c in log.columns if c.lower().startswith(column.lower()[:3])]
+        hint = f" Rename {similar[0]!r} to '{column}' to use it." if similar else ""
+        what, unit = names[column]
+        warnings.append(
+            f"Warning: the field log has no '{column}' column; the air {what} of the "
+            f"configuration is used for all fluxes (Air: {key} = {cfg['Air'][key]} {unit}).{hint}"
+        )
+    return warnings
+
+
 def field_log(cfg):
     """The field log of the configuration (read once), in the LGR clock, or None."""
     options = cfg.get("FieldLog") or {}
@@ -104,6 +125,8 @@ def field_log(cfg):
     cached = cfg.get("_field_log")
     if cached is None or cached[0] != (path, offset):
         log = load_field_log(path)
+        for warning in missing_conditions(log, cfg):
+            print(warning)
         shift = pd.Timedelta(seconds=offset)
         log["Start"] += shift
         log["End"] += shift

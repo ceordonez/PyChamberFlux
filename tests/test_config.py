@@ -160,6 +160,32 @@ def test_template_field_log_matches_the_example(cfg, example_data):
     assert table["Air temp (degC)"].tolist() == [32, 32, 31.5]
 
 
+def test_warning_for_misspelt_pressure_column(cfg, tmp_path, capsys):
+    (tmp_path / "log.csv").write_text("Start,Temp,Press\n2025-01-11 17:30,32,1011\n")
+    cfg["FieldLog"] = {"file": "log.csv"}
+    cfg = validate_config(cfg, str(tmp_path / "config.yml"))
+    result = conditions(cfg, pd.Timestamp("2025-01-11 17:35"))
+    out = capsys.readouterr().out
+    assert "no 'Pres' column" in out and "Rename 'Press' to 'Pres'" in out
+    assert "1014 hPa" in out and "'Temp'" not in out
+    assert result["Pres"] == 1014  # the configuration value is used
+    conditions(cfg, pd.Timestamp("2025-01-11 17:40"))
+    assert capsys.readouterr().out == ""  # warned once, when the log is read
+
+
+def test_no_warning_with_temp_and_pres(logged_cfg, capsys):
+    conditions(logged_cfg, pd.Timestamp("2025-01-11 17:35"))
+    assert "Warning" not in capsys.readouterr().out
+
+
+def test_warning_for_missing_temperature_without_hint(cfg, tmp_path, capsys):
+    (tmp_path / "log.csv").write_text("Start,Pres,Location\n2025-01-11 17:30,1011,A\n")
+    cfg["FieldLog"] = {"file": "log.csv"}
+    conditions(validate_config(cfg, str(tmp_path / "config.yml")), pd.Timestamp("2025-01-11"))
+    out = capsys.readouterr().out
+    assert "no 'Temp' column" in out and "30 degC" in out and "Rename" not in out
+
+
 def test_field_log_time_offset(logged_cfg):
     # the LGR clock is one hour ahead of the field log
     logged_cfg["FieldLog"]["time_offset"] = 3600

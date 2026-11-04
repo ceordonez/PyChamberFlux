@@ -12,6 +12,8 @@ All notable changes to PyChamberFlux. Versions follow [semantic versioning](http
 
 ### Changed
 
+- `--batch`: the message for a skipped file says in which folder the saved windows were looked for.
+- Field log: a warning when the `Temp` or `Pres` column is missing (with a hint for similar names such as `Press`), since the values of the configuration are then used.
 - Field log: empty rows and unnamed empty columns (e.g. trailing commas from a spreadsheet) are ignored instead of being copied to the results.
 
 ## [0.2.0] - 2026-11-03

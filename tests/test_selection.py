@@ -206,7 +206,8 @@ def test_batch_recalculates_saved_windows(monkeypatch, cfg, tmp_path, capsys):
     cfg["Output"] = {"units": ["umol m-2 s-1"]}  # a configuration change
     main.main(["--batch", str(lgr)])
     out = capsys.readouterr().out
-    assert "Skipped: not processed before" in out  # b.txt
+    assert "Skipped: no saved windows in" in out  # b.txt
+    assert "another output folder" in out
     after = campaign.read_text()
     assert after != before and "(umol/m2/s)" in after.splitlines()[0]
     assert "b.txt" not in after

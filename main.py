@@ -91,7 +91,8 @@ def process_file(path, cfg, progress="", batch=False):
     windows = saved_windows(cfg, name, data)
     if batch:
         if windows is None:
-            print("Skipped: not processed before (no saved windows to recalculate).")
+            print(f"Skipped: no saved windows in {results_folder(cfg, name)}\n"
+                  "  (not processed before, or processed with another output folder or site).")
             return "skip"
         save_results(data, calculate_fluxes(cfg, data, windows), cfg, name, path)
         return "save"
