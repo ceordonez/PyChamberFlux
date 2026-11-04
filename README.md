@@ -33,7 +33,7 @@ The project is managed with [uv](https://docs.astral.sh/uv/). From the repositor
 uv sync
 ```
 
-This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, including `pyghgaq>=0.1.5` (taken from its GitHub repository until 0.1.5 is on PyPI). `uv run` (below) also does this automatically.
+This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, including `pyghgaq>=0.1.5` from PyPI. `uv run` (below) also does this automatically.
 
 ## Usage
 

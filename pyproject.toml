@@ -18,10 +18,6 @@ dependencies = [
 # Application run with `uv run main.py`, not an installable package
 package = false
 
-[tool.uv.sources]
-# pyghgaq 0.1.5 is not on PyPI yet; remove this once it is released there
-pyghgaq = { git = "https://github.com/ceordonez/PyGHGaq", branch = "main" }
-
 [dependency-groups]
 dev = [
     "pytest>=9.2.0",

@@ -652,7 +652,7 @@ requires-dist = [
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "pandas" },
-    { name = "pyghgaq", git = "https://github.com/ceordonez/PyGHGaq?branch=main" },
+    { name = "pyghgaq", specifier = ">=0.1.5" },
     { name = "pyyaml" },
     { name = "xlsxwriter" },
 ]
@@ -666,12 +666,16 @@ dev = [
 [[package]]
 name = "pyghgaq"
 version = "0.1.5"
-source = { git = "https://github.com/ceordonez/PyGHGaq?branch=main#6e86ef9085f121ea55cd06e2d1f7be795396deea" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "pint" },
     { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cd/cd/9ce26929b5dacbb2fadd17ce45696331854aff2f5763bdc1c0db04e80de1/pyghgaq-0.1.5.tar.gz", hash = "sha256:ffc48f368a118a668d2a56d1067fdfd11651ff6e4db50dab1fbe11d23febc312", size = 15261, upload-time = "2026-11-04T08:42:58.607Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/80/f7d70b0776effd8a12849f5927f380984eadcdd91a9292628a4433316f5e/pyghgaq-0.1.5-py3-none-any.whl", hash = "sha256:6207027753498f4d010f1e33927f43e3324c6bd45ed7ec1e2d165ae843ffb881", size = 19620, upload-time = "2026-11-04T08:42:57.442Z" },
 ]
 
 [[package]]
