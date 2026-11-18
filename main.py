@@ -5,7 +5,8 @@
 Usage:
     uv run main.py                     choose the files in a dialog
     uv run main.py FILE [FILE ...]     process these LGR files
-    uv run main.py FOLDER              process all .txt files in the folder
+    uv run main.py FOLDER              process all LGR files (.txt, .txt.zip) in the
+                                       folder and its subfolders
     uv run main.py -c other.yml FILE   use another configuration file
     uv run main.py -n FOLDER           only the files not processed yet
     uv run main.py --batch FOLDER      recalculate the files processed before, with
@@ -21,7 +22,7 @@ from src.config import ConfigError, validate_config
 from src.confirm import confirm_settings
 from src.plots import plot_data
 from src.processing_data import calculate_fluxes, processing_data
-from src.read_data import read_config, read_lgr_file
+from src.read_data import read_config, read_lgr_file, source_name
 from src.write import processed_files, results_folder, saved_windows, write_results
 
 HERE = Path(__file__).resolve().parent
@@ -34,13 +35,21 @@ def default_config():
 
 
 def find_files(paths):
-    """LGR files from the arguments: files as given, folders -> their .txt files."""
+    """LGR files from the arguments: files as given, folders -> their LGR files.
+
+    A folder is searched with its subfolders (the analyser writes one folder
+    per day) for .txt and .txt.zip files. A .txt is left out when its .zip is
+    next to it, since both hold the same data.
+    """
     files = []
     for path in map(Path, paths):
         if path.is_dir():
-            found = sorted(path.glob("*.txt"))
+            found = [f for f in path.rglob("*") if f.is_file()
+                     and f.name.lower().endswith((".txt", ".txt.zip"))]
+            zipped = {f.with_suffix("") for f in found if f.suffix.lower() == ".zip"}
+            found = sorted((f for f in found if f not in zipped), key=lambda f: (f.parent, f.name))
             if not found:
-                print(f"No .txt files in {path}")
+                print(f"No .txt or .txt.zip files in {path}")
             files += found
         elif path.is_file():
             files.append(path)
@@ -61,7 +70,7 @@ def ask_files(initialdir=None):
     names = filedialog.askopenfilenames(
         title="Select LGR files",
         initialdir=initialdir if initialdir and Path(initialdir).is_dir() else None,
-        filetypes=[("LGR files", "*.txt"), ("All files", "*")],
+        filetypes=[("LGR files", "*.txt *.zip"), ("All files", "*")],
     )
     root.destroy()
     return [Path(name) for name in names]
@@ -87,7 +96,7 @@ def process_file(path, cfg, progress="", batch=False):
         print("Skipped, no data.")
         return "skip"
 
-    name = path.stem
+    name = Path(source_name(path)).stem
     windows = saved_windows(cfg, name, data)
     if batch:
         if windows is None:
@@ -118,7 +127,7 @@ def process_file(path, cfg, progress="", batch=False):
 def save_results(data, results, cfg, name, path):
     """Figures and result files of one LGR file."""
     plot_data(data, results, cfg, name)
-    write_results(data, results, cfg, name, source=path.name)
+    write_results(data, results, cfg, name, source=source_name(path))
 
 
 def main(argv=None):
@@ -127,7 +136,8 @@ def main(argv=None):
     )
     parser.add_argument(
         "paths", nargs="*",
-        help="LGR files or folders (all .txt files). Without paths, a dialog opens.",
+        help="LGR files (.txt or .txt.zip) or folders (searched with their subfolders). "
+             "Without paths, a dialog opens.",
     )
     parser.add_argument(
         "-c", "--config", default=str(default_config()),
@@ -162,8 +172,8 @@ def main(argv=None):
     files = find_files(args.paths) if args.paths else ask_files(cfg.get("path_in"))
     if args.new_only:
         done = processed_files(cfg)
-        skipped = [f for f in files if f.name in done]
-        files = [f for f in files if f.name not in done]
+        skipped = [f for f in files if source_name(f) in done]
+        files = [f for f in files if source_name(f) not in done]
         if skipped:
             print(f"Skipping {len(skipped)} file{'s' if len(skipped) > 1 else ''} "
                   f"already in the campaign file (--new-only).")

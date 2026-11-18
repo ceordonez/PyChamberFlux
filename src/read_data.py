@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import io
 import os
+import zipfile
+from pathlib import Path
 
 import pandas as pd
 import yaml
@@ -10,38 +13,51 @@ import yaml
 DIAGNOSTIC_COLUMNS = ["GasT_C", "AmbT_C", "GasP_torr"]
 
 
-def footer_pos(filename: str) -> int:
-    """Find footer position in LGR file.
+def source_name(path) -> str:
+    """Name of an LGR file without a ``.zip`` extension.
+
+    ``gga_2025-07-19_f0003.txt.zip`` and ``gga_2025-07-19_f0003.txt`` hold the
+    same data, so both are recorded (in the results and the campaign file) as
+    ``gga_2025-07-19_f0003.txt``.
+    """
+    name = Path(path).name
+    return name[: -len(".zip")] if name.lower().endswith(".zip") else name
+
+
+def read_text(filename: str) -> str:
+    """Text of an LGR file, plain (.txt) or zipped (.txt.zip, as the analyser archives them)."""
+    if not os.path.isfile(filename):
+        raise FileNotFoundError(f"The file '{filename}' does not exist.")
+    if zipfile.is_zipfile(filename):
+        with zipfile.ZipFile(filename) as zf:
+            members = [m for m in zf.namelist() if m.lower().endswith(".txt")]
+            if len(members) != 1:
+                raise ValueError(f"expected one .txt file in {filename}, found {len(members)}")
+            return zf.read(members[0]).decode("latin-1")
+    with open(filename, encoding="latin-1") as fh:
+        return fh.read()
+
+
+def footer_pos(text: str) -> int:
+    """Number of lines of the footer of an LGR file.
+
+    Closed LGR files end with a signature block whose first line starts with
+    ``-----B``; it is skipped when reading.
 
     Parameters
     ----------
-    filename : str
-        File name of LGR file.
+    text : str
+        Text of the LGR file (see `read_text`).
 
     Returns
     -------
     int
-        Starting line number of the footer of the LGR file.
+        Number of lines from the start of the footer to the end of the file
+        (0 when there is no footer).
     """
-    # Ensure the file exists before attempting to open it
-    if not os.path.isfile(filename):
-        raise FileNotFoundError(f"The file '{filename}' does not exist.")
-
-    with open(filename, "r") as z:
-        i = 0
-        ib = None  # Initialize ib to avoid potential unbound variable error
-        for line in z:
-            if line.startswith("-----B"):
-                ib = i
-            i += 1
-
-        # Check if the footer marker was found
-        if ib is not None:
-            ifooter = i - ib
-        else:
-            ifooter = 0
-
-    return ifooter
+    lines = text.splitlines()
+    starts = [i for i, line in enumerate(lines) if line.startswith("-----B")]
+    return len(lines) - starts[-1] if starts else 0
 
 
 def read_lgr_file(filename: str) -> pd.DataFrame:
@@ -50,7 +66,7 @@ def read_lgr_file(filename: str) -> pd.DataFrame:
     Parameters
     ----------
     filename: str
-        Path of the LGR file (.txt).
+        Path of the LGR file (.txt, or .txt.zip as archived by the analyser).
 
     Returns
     -------
@@ -58,11 +74,12 @@ def read_lgr_file(filename: str) -> pd.DataFrame:
         Data from the LGR file indexed by Time, columns [[CH4]d_ppm, [CO2]d_ppm]
         and the DIAGNOSTIC_COLUMNS present in the file.
     """
-    ifoot = footer_pos(filename)
+    text = read_text(filename)
+    ifoot = footer_pos(text)
 
     try:
         data = pd.read_csv(
-            filename,
+            io.StringIO(text),
             sep=",",
             header=1,
             skipfooter=ifoot,

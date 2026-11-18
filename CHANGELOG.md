@@ -9,9 +9,11 @@ All notable changes to PyChamberFlux. Versions follow [semantic versioning](http
 - Window to check (and edit) the settings that change between campaigns before processing; changes apply to the run and are saved to the configuration file only on request, keeping its comments. `--no-confirm` skips it.
 - On Linux, *Browse…* in the settings window uses the system file dialog (zenity, if installed), which can create folders; it opens at the folder already entered.
 - Template field log for the example file: `examples/fieldlog.csv`.
+- Zipped LGR files (`.txt.zip`, as the analyser archives them) are read directly, without unzipping them first.
 
 ### Changed
 
+- A folder given on the command line is searched with its subfolders (the analyser writes one folder per day), for `.txt` and `.txt.zip` files; a `.txt` is left out when its `.zip` is next to it. Results of a zipped file are recorded under the name without `.zip`, so zipped and unzipped copies of a file are the same file for `--new-only` and `--batch`.
 - `--batch`: the message for a skipped file says in which folder the saved windows were looked for.
 - Field log: a warning when the `Temp` or `Pres` column is missing (with a hint for similar names such as `Press`), since the values of the configuration are then used.
 - pyghgaq is installed from PyPI (0.1.5) instead of its GitHub repository.

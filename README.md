@@ -23,7 +23,7 @@ Interactive tool to calculate floating chamber fluxes of CH<sub>4</sub> and CO<s
 4. On the plot, check the shaded flux windows (red labels need a look), adjust them with the mouse (left click: add a point, drag a point to move it, right click: remove, `d`: delete a window, `u`: undo) and press **Enter** to save.
 5. The results are in `path_out`: `<site>_example/results.csv` with one row per flux, and `<site>_fluxes.csv` collecting all the files of the site.
 
-Then run it on your own data: `uv run main.py path/to/LGR/folder` processes every `.txt` file in the folder, one after the other (`s` skips a file, `q` stops). See [Usage](#usage) for details.
+Then run it on your own data: `uv run main.py path/to/LGR/folder` processes every LGR file in the folder and its subfolders (`.txt`, or `.txt.zip` as the analyser archives them), one after the other (`s` skips a file, `q` stops). See [Usage](#usage) for details.
 
 ## Installation
 
@@ -54,7 +54,8 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
    ```sh
    uv run main.py                        # choose the LGR files in a dialog
    uv run main.py gga_2025-01-21_f0001.txt
-   uv run main.py path/to/LGR/2025-01-21  # all .txt files in the folder, one after the other
+   uv run main.py gga_2025-01-21_f0001.txt.zip  # zipped files are read directly
+   uv run main.py path/to/LGR             # all LGR files in the folder and its subfolders, one after the other
    uv run main.py -c other_site.yml FILE  # another configuration file
    uv run main.py -n path/to/LGR          # only the files not in <site>_fluxes.csv yet
    uv run main.py --batch path/to/LGR     # recalculate processed files with their saved windows
@@ -77,6 +78,8 @@ This creates `.venv` with Python ≥ 3.12 and the versions pinned in `uv.lock`, 
    - Use the zoom and pan tools of the toolbar to look closer; clicks do not add points while one of them is active (click the tool again to switch it off).
 
    An unpaired last point and windows with fewer than 3 samples are ignored. Files that are not LGR files are skipped.
+
+   **Zipped and plain files.** The analyser archives its files as `.txt.zip`, one folder per day; give the top folder and every day is found. When a `.txt` and its `.txt.zip` are both in a folder, only the `.zip` is processed. Results are recorded under the name without `.zip` (`gga_2025-01-21_f0001.txt`), so a zipped and an unzipped copy of the same file count as one file for `--new-only` and `--batch`.
 
    A file processed before opens with the windows saved in its `results.csv` instead of the pre-selection, so you only change what needs fixing.
 
